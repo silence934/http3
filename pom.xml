@@ -59,6 +59,12 @@
 
 
         <dependency>
+            <groupId>io.projectreactor.netty</groupId>
+            <artifactId>reactor-netty-core</artifactId>
+            <version>1.0.19</version>
+        </dependency>
+
+        <dependency>
             <groupId>io.netty.incubator</groupId>
             <artifactId>netty-incubator-codec-classes-quic</artifactId>
             <version>${netty.quic.version}</version>
