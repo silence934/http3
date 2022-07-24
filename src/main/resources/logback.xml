@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration scan="true" scanPeriod="60 seconds" debug="false">
+    <!-- 日志存放路径 -->
+    <property name="log.path" value="${HOME}/ds-console/logs"/>
+    <!-- 日志输出格式 -->
+    <property name="log.pattern"
+              value="%cyan(%.-4level %d{MM-dd HH:mm:ss.SSS})   %green([%thread]) %cyan(%logger{20}.%method-%line) - %green(%msg%n)"/>
+
+    <!-- 控制台输出 -->
+    <appender name="console" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${log.pattern}</pattern>
+        </encoder>
+    </appender>
+
+
+    <logger name="io.netty.handler.logging.LoggingHandler" level="trace"/>
+    <logger name="com.example.springboot.test.QuicServerTest" level="debug"/>
+    <logger name="reactor.netty.channel.ChannelOperationsHandler" level="debug"/>
+
+    <root level="info">
+        <appender-ref ref="console"/>
+    </root>
+
+</configuration>
