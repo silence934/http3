@@ -18,6 +18,7 @@ package xyz.nyist.quic;
 import io.netty.channel.*;
 import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.socket.DatagramChannel;
+import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.incubator.codec.quic.QuicChannel;
 import io.netty.incubator.codec.quic.QuicCongestionControlAlgorithm;
 import io.netty.incubator.codec.quic.QuicSslEngine;
@@ -35,6 +36,8 @@ import reactor.netty.transport.TransportConfig;
 import reactor.util.Logger;
 import reactor.util.Loggers;
 import reactor.util.annotation.Nullable;
+import xyz.nyist.http3.Http3FrameToHttpObjectCodec;
+import xyz.nyist.http3.Http3RequestStreamInitializer;
 
 import java.net.SocketAddress;
 import java.time.Duration;
@@ -511,6 +514,15 @@ abstract class QuicTransportConfig<CONF extends TransportConfig> extends Transpo
                 ChannelOperations.addReactiveBridge(ch, (conn, observer, msg) -> new QuicInboundStreamOperations(conn, observer), streamListener);
             } else {
                 ch.pipeline().addLast(new QuicOutboundStreamTrafficHandler());
+                //todo 改动1 client
+                ch.pipeline().addLast(new Http3RequestStreamInitializer() {
+                    @Override
+                    protected void initRequestStream(QuicStreamChannel ch) {
+                        ch.pipeline()
+                                .addLast(new Http3FrameToHttpObjectCodec(false))
+                                .addLast(new HttpObjectAggregator(512 * 1024));
+                    }
+                });
                 ChannelOperations.addReactiveBridge(ch, (conn, observer, msg) -> new QuicOutboundStreamOperations(conn, observer), streamListener);
             }
         }

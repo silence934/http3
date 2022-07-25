@@ -23,6 +23,7 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCountUtil;
+import reactor.netty.Connection;
 
 import java.util.List;
 import java.util.function.LongFunction;
@@ -117,7 +118,10 @@ abstract class Http3UnidirectionalStreamInboundHandler extends ByteToMessageDeco
      */
     private void initControlStream(ChannelHandlerContext ctx) {
         if (ctx.channel().parent().attr(REMOTE_CONTROL_STREAM).setIfAbsent(true) == null) {
-            ctx.pipeline().addLast(localControlStreamHandler);
+            //ctx.pipeline().addLast(localControlStreamHandler);
+            // todo 改动2 client
+            Connection c = Connection.from(ctx.channel());
+            c.addHandlerLast(localControlStreamHandler);
             // Replace this handler with the codec now.
             ctx.pipeline().replace(this, null,
                                    codecFactory.newCodec(Http3ControlStreamFrameTypeValidator.INSTANCE, NO_STATE,

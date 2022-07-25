@@ -52,7 +52,7 @@ public abstract class Http3RequestStreamInboundHandler extends ChannelInboundHan
         firstFrameReceived = true;
         long id = ((QuicStreamChannel) ctx.channel()).streamId();
         boolean inputShutdown = ((QuicStreamChannel) ctx.channel()).isInputShutdown();
-        logger.info("收到消息:{} streamId:{}  inputShutdown:{}", msg.getClass(), id, inputShutdown);
+        //logger.info("收到消息:{} streamId:{}  inputShutdown:{}", msg.getClass(), id, inputShutdown);
         if (msg instanceof Http3UnknownFrame) {
             channelRead(ctx, (Http3UnknownFrame) msg);
             if (inputShutdown) {
@@ -73,7 +73,7 @@ public abstract class Http3RequestStreamInboundHandler extends ChannelInboundHan
 
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
-        logger.info("userEventTriggered:{}", evt);
+        //logger.info("userEventTriggered:{}", evt);
         if (evt == ChannelInputShutdownEvent.INSTANCE) {
             notifyLast(ctx);
         }
