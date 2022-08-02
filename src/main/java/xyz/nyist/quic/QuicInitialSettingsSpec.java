@@ -197,7 +197,7 @@ public final class QuicInitialSettingsSpec {
 
     }
 
-    static final class Build implements Builder {
+    public static final class Build implements Builder {
 
         static final long DEFAULT_MAX_DATA = 0L;
 
@@ -223,7 +223,7 @@ public final class QuicInitialSettingsSpec {
 
         long maxStreamsUnidirectional = DEFAULT_MAX_STREAM_UNIDIRECTIONAL;
 
-        QuicInitialSettingsSpec build() {
+        public QuicInitialSettingsSpec build() {
             return new QuicInitialSettingsSpec(this);
         }
 

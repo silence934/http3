@@ -12,8 +12,8 @@ import io.netty.util.NetUtil;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import xyz.nyist.http3.Http3;
-import xyz.nyist.http3.Http3ClientConnectionHandler;
+import xyz.nyist.core.Http3;
+import xyz.nyist.core.Http3ClientConnectionHandler;
 import xyz.nyist.quic.QuicClient;
 import xyz.nyist.quic.QuicConnection;
 
@@ -87,7 +87,7 @@ public class QuicClientTest {
                          })
                 ).subscribe();
 
-        boolean await = latch.await(5, TimeUnit.SECONDS);
+        boolean await = latch.await(30, TimeUnit.SECONDS);
         System.out.println("await:" + await);
         System.err.println(response.get());
 

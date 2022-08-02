@@ -13,31 +13,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package xyz.nyist.quic;
+package xyz.nyist.http;
 
 import io.netty.channel.*;
 import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.socket.DatagramChannel;
-import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.incubator.codec.quic.QuicChannel;
 import io.netty.incubator.codec.quic.QuicCongestionControlAlgorithm;
 import io.netty.incubator.codec.quic.QuicSslEngine;
 import io.netty.incubator.codec.quic.QuicStreamChannel;
 import io.netty.util.AttributeKey;
+import lombok.extern.slf4j.Slf4j;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
-import reactor.netty.ChannelPipelineConfigurer;
 import reactor.netty.Connection;
 import reactor.netty.ConnectionObserver;
-import reactor.netty.NettyPipeline;
 import reactor.netty.channel.ChannelOperations;
 import reactor.netty.resources.LoopResources;
 import reactor.netty.transport.TransportConfig;
-import reactor.util.Logger;
-import reactor.util.Loggers;
 import reactor.util.annotation.Nullable;
 import xyz.nyist.core.Http3FrameToHttpObjectCodec;
-import xyz.nyist.core.Http3RequestStreamInitializer;
+import xyz.nyist.http.server.Http3ServerOperations;
+import xyz.nyist.quic.QuicInitialSettingsSpec;
+import xyz.nyist.quic.QuicResources;
 
 import java.net.SocketAddress;
 import java.time.Duration;
@@ -50,7 +48,6 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static reactor.netty.ConnectionObserver.State.CONFIGURED;
-import static reactor.netty.ConnectionObserver.State.CONNECTED;
 import static reactor.netty.ReactorNetty.format;
 
 /**
@@ -59,7 +56,9 @@ import static reactor.netty.ReactorNetty.format;
  * @param <CONF> Configuration implementation
  * @author Violeta Georgieva
  */
-abstract class QuicTransportConfig<CONF extends TransportConfig> extends TransportConfig {
+@Slf4j
+public abstract class Http3TransportConfig<CONF extends TransportConfig> extends TransportConfig {
+
 
     static final long DEFAULT_ACK_DELAY_EXPONENT = 3;
 
@@ -69,8 +68,6 @@ abstract class QuicTransportConfig<CONF extends TransportConfig> extends Transpo
 
     static final boolean DEFAULT_HYSTART = true;
 
-    static final QuicInitialSettingsSpec DEFAULT_INITIAL_SETTINGS = new QuicInitialSettingsSpec.Build().build();
-
     static final int DEFAULT_LOCAL_CONNECTION_ID_LENGTH = 20;
 
     static final Duration DEFAULT_MAX_ACK_DELAY = Duration.ofMillis(25);
@@ -79,53 +76,49 @@ abstract class QuicTransportConfig<CONF extends TransportConfig> extends Transpo
 
     static final long DEFAULT_MAX_SEND_UDP_PAYLOAD_SIZE = 1200;
 
-    static final Logger log = Loggers.getLogger(QuicTransportConfig.class);
+    protected long ackDelayExponent;
 
-    long ackDelayExponent;
+    protected boolean activeMigration;
 
-    boolean activeMigration;
+    protected QuicCongestionControlAlgorithm congestionControlAlgorithm;
 
-    QuicCongestionControlAlgorithm congestionControlAlgorithm;
+    protected Consumer<? super CONF> doOnBind;
 
-    Consumer<? super CONF> doOnBind;
+    protected Consumer<? super Connection> doOnBound;
 
-    Consumer<? super Connection> doOnBound;
+    protected Consumer<? super Connection> doOnUnbound;
 
-    Consumer<? super Connection> doOnUnbound;
+    protected boolean grease;
 
-    boolean grease;
+    protected boolean hystart;
 
-    boolean hystart;
+    protected Duration idleTimeout;
 
-    Duration idleTimeout;
+    protected QuicInitialSettingsSpec initialSettings;
 
-    QuicInitialSettingsSpec initialSettings;
+    protected int localConnectionIdLength;
 
-    int localConnectionIdLength;
+    protected Duration maxAckDelay;
 
-    Duration maxAckDelay;
+    protected long maxRecvUdpPayloadSize;
 
-    long maxRecvUdpPayloadSize;
+    protected long maxSendUdpPayloadSize;
 
-    long maxSendUdpPayloadSize;
+    protected int recvQueueLen;
 
-    int recvQueueLen;
+    protected int sendQueueLen;
 
-    int sendQueueLen;
+    protected Function<QuicChannel, ? extends QuicSslEngine> sslEngineProvider;
 
-    Function<QuicChannel, ? extends QuicSslEngine>
-            sslEngineProvider;
+    protected Map<AttributeKey<?>, ?> streamAttrs;
 
-    Map<AttributeKey<?>, ?> streamAttrs;
+    protected BiFunction<? super Http3ServerRequest, ? super Http3ServerResponse, ? extends Publisher<Void>> streamHandler;
 
-    BiFunction<? super QuicInbound, ? super QuicOutbound, ? extends Publisher<Void>>
-            streamHandler;
+    protected ConnectionObserver streamObserver;
 
-    ConnectionObserver streamObserver;
+    protected Map<ChannelOption<?>, ?> streamOptions;
 
-    Map<ChannelOption<?>, ?> streamOptions;
-
-    QuicTransportConfig(
+    protected Http3TransportConfig(
             Map<ChannelOption<?>, ?> options,
             Map<ChannelOption<?>, ?> streamOptions,
             Supplier<? extends SocketAddress> bindAddress) {
@@ -135,7 +128,6 @@ abstract class QuicTransportConfig<CONF extends TransportConfig> extends Transpo
         this.congestionControlAlgorithm = QuicCongestionControlAlgorithm.CUBIC;
         this.grease = DEFAULT_GREASE;
         this.hystart = DEFAULT_HYSTART;
-        this.initialSettings = DEFAULT_INITIAL_SETTINGS;
         this.localConnectionIdLength = DEFAULT_LOCAL_CONNECTION_ID_LENGTH;
         this.maxAckDelay = DEFAULT_MAX_ACK_DELAY;
         this.maxRecvUdpPayloadSize = DEFAULT_MAX_RECV_UDP_PAYLOAD_SIZE;
@@ -145,7 +137,7 @@ abstract class QuicTransportConfig<CONF extends TransportConfig> extends Transpo
         this.streamOptions = Objects.requireNonNull(streamOptions, "streamOptions");
     }
 
-    QuicTransportConfig(QuicTransportConfig<CONF> parent) {
+    protected Http3TransportConfig(Http3TransportConfig<CONF> parent) {
         super(parent);
         this.ackDelayExponent = parent.ackDelayExponent;
         this.activeMigration = parent.activeMigration;
@@ -156,7 +148,6 @@ abstract class QuicTransportConfig<CONF extends TransportConfig> extends Transpo
         this.grease = parent.grease;
         this.hystart = parent.hystart;
         this.idleTimeout = parent.idleTimeout;
-        this.initialSettings = parent.initialSettings;
         this.localConnectionIdLength = parent.localConnectionIdLength;
         this.maxAckDelay = parent.maxAckDelay;
         this.maxRecvUdpPayloadSize = parent.maxRecvUdpPayloadSize;
@@ -174,7 +165,7 @@ abstract class QuicTransportConfig<CONF extends TransportConfig> extends Transpo
         return TransportConfig.updateMap(parentMap, key, value);
     }
 
-    static ChannelInitializer<QuicStreamChannel> streamChannelInitializer(
+    protected static ChannelInitializer<QuicStreamChannel> streamChannelInitializer(
             @Nullable ChannelHandler loggingHandler, ConnectionObserver streamListener, boolean inbound) {
         return new QuicStreamChannelInitializer(loggingHandler, streamListener, inbound);
     }
@@ -237,14 +228,6 @@ abstract class QuicTransportConfig<CONF extends TransportConfig> extends Transpo
         return idleTimeout;
     }
 
-    /**
-     * Return the configured QUIC initial settings or the default.
-     *
-     * @return the configured QUIC initial settings or the default
-     */
-    public final QuicInitialSettingsSpec initialSettings() {
-        return initialSettings;
-    }
 
     /**
      * Return true if active migration is enabled.
@@ -383,10 +366,6 @@ abstract class QuicTransportConfig<CONF extends TransportConfig> extends Transpo
         return QuicResources.get();
     }
 
-    @Override
-    protected ChannelPipelineConfigurer defaultOnChannelInit() {
-        return new QuicChannelInitializer(this);
-    }
 
     @Override
     protected final EventLoopGroup eventLoopGroup() {
@@ -395,95 +374,8 @@ abstract class QuicTransportConfig<CONF extends TransportConfig> extends Transpo
 
     protected abstract ChannelInitializer<Channel> parentChannelInitializer();
 
-    /**
-     * Do not handle channelRead, it will be handled by
-     * io.netty.incubator.codec.quic.QuicheQuicChannel#newChannelPipeline()
-     * It will register the stream.
-     */
-    static final class QuicChannelInboundHandler extends ChannelInboundHandlerAdapter {
 
-        final ConnectionObserver listener;
-
-        final ChannelHandler loggingHandler;
-
-        final Map<AttributeKey<?>, ?> streamAttrs;
-
-        final ConnectionObserver streamObserver;
-
-        final Map<ChannelOption<?>, ?> streamOptions;
-
-        QuicChannelInboundHandler(
-                ConnectionObserver listener,
-                @Nullable ChannelHandler loggingHandler,
-                Map<AttributeKey<?>, ?> streamAttrs,
-                ConnectionObserver streamObserver,
-                Map<ChannelOption<?>, ?> streamOptions) {
-            this.listener = listener;
-            this.loggingHandler = loggingHandler;
-            this.streamAttrs = streamAttrs;
-            this.streamObserver = streamObserver;
-            this.streamOptions = streamOptions;
-        }
-
-        @Override
-        public void channelActive(ChannelHandlerContext ctx) {
-            if (ctx.channel().isActive()) {
-                Connection c = Connection.from(ctx.channel());
-                listener.onStateChange(c, CONNECTED);
-                QuicOperations ops = new QuicOperations((QuicChannel) ctx.channel(), loggingHandler,
-                                                        streamObserver, streamAttrs, streamOptions);
-                ops.bind();
-                listener.onStateChange(ops, CONFIGURED);
-            }
-        }
-
-        @Override
-        public void channelInactive(ChannelHandlerContext ctx) {
-            // TODO need more here
-            Connection connection = Connection.from(ctx.channel());
-            listener.onStateChange(connection, ConnectionObserver.State.DISCONNECTING);
-        }
-
-        @Override
-        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-            // TODO need more here
-            Connection connection = Connection.from(ctx.channel());
-            listener.onUncaughtException(connection, cause);
-        }
-
-    }
-
-    static final class QuicChannelInitializer implements ChannelPipelineConfigurer {
-
-        final ChannelHandler loggingHandler;
-
-        final Map<AttributeKey<?>, ?> streamAttrs;
-
-        final ConnectionObserver streamObserver;
-
-        final Map<ChannelOption<?>, ?> streamOptions;
-
-        QuicChannelInitializer(QuicTransportConfig<?> config) {
-            this.loggingHandler = config.loggingHandler();
-            this.streamAttrs = config.streamAttrs;
-            this.streamObserver = config.streamObserver;
-            this.streamOptions = config.streamOptions;
-        }
-
-        @Override
-        public void onChannelInit(ConnectionObserver observer, Channel channel, @Nullable SocketAddress remoteAddress) {
-            if (log.isDebugEnabled()) {
-                log.debug(format(channel, "Created a new QUIC channel."));
-            }
-
-            channel.pipeline().remove(NettyPipeline.ReactiveBridge);
-            channel.pipeline().addLast(NettyPipeline.ReactiveBridge,
-                                       new QuicChannelInboundHandler(observer, loggingHandler, streamAttrs, streamObserver, streamOptions));
-        }
-
-    }
-
-    static final class QuicStreamChannelInitializer extends ChannelInitializer<QuicStreamChannel> {
+    protected static final class QuicStreamChannelInitializer extends ChannelInitializer<QuicStreamChannel> {
 
         final ChannelHandler loggingHandler;
 
@@ -503,38 +395,42 @@ abstract class QuicTransportConfig<CONF extends TransportConfig> extends Transpo
         @Override
         protected void initChannel(QuicStreamChannel ch) {
             if (log.isDebugEnabled()) {
-                log.debug(format(ch, "Created a new QUIC stream."));
+                log.debug(format(ch, "初始化一个QuicStreamChannel"));
             }
 
             if (loggingHandler != null) {
                 ch.pipeline().addLast(loggingHandler);
             }
             if (inbound) {
-                ch.pipeline().addLast(new QuicInboundStreamTrafficHandler());
-                ChannelOperations.addReactiveBridge(ch, (conn, observer, msg) -> new QuicInboundStreamOperations(conn, observer), streamListener);
+                ch.pipeline().addLast(new Http3FrameToHttpObjectCodec(true, false));
+//                        .addLast(new HttpObjectAggregator(512 * 1024));
+                //ChannelOperations.addReactiveBridge(ch, (conn, observer, msg) -> new Http3ServerOperations(conn, observer), streamListener);
+                ch.pipeline().addLast(new Http3InboundStreamTrafficHandler(streamListener));
+                ChannelOperations.addReactiveBridge(ch, ChannelOperations.OnSetup.empty(), streamListener);
             } else {
-                ch.pipeline().addLast(new QuicOutboundStreamTrafficHandler());
-                //todo 改动1 client
-                ch.pipeline().addLast(new Http3RequestStreamInitializer() {
-                    @Override
-                    protected void initRequestStream(QuicStreamChannel ch) {
-                        ch.pipeline()
-                                .addLast(new Http3FrameToHttpObjectCodec(false))
-                                .addLast(new HttpObjectAggregator(512 * 1024));
-                    }
-                });
-                ChannelOperations.addReactiveBridge(ch, (conn, observer, msg) -> new QuicOutboundStreamOperations(conn, observer), streamListener);
+//                ch.pipeline().addLast(new QuicOutboundStreamTrafficHandler());
+//                //todo 改动1 client
+//                ch.pipeline().addLast(new Http3RequestStreamInitializer() {
+//                    @Override
+//                    protected void initRequestStream(QuicStreamChannel ch) {
+//                        ch.pipeline()
+//                                .addLast(new Http3FrameToHttpObjectCodec(false))
+//                                .addLast(new HttpObjectAggregator(512 * 1024));
+//                    }
+//                });
+//                ChannelOperations.addReactiveBridge(ch, (conn, observer, msg) -> new QuicOutboundStreamOperations(conn, observer), streamListener);
             }
+            //ChannelUtil.printChannel(ch);
         }
 
     }
 
-    static final class QuicStreamChannelObserver implements ConnectionObserver {
+    protected static final class QuicStreamChannelObserver implements ConnectionObserver {
 
-        final BiFunction<? super QuicInbound, ? super QuicOutbound, ? extends Publisher<Void>> streamHandler;
+        final BiFunction<? super Http3ServerRequest, ? super Http3ServerResponse, ? extends Publisher<Void>> streamHandler;
 
-        QuicStreamChannelObserver(
-                @Nullable BiFunction<? super QuicInbound, ? super QuicOutbound, ? extends Publisher<Void>> streamHandler) {
+        public QuicStreamChannelObserver(
+                @Nullable BiFunction<? super Http3ServerRequest, ? super Http3ServerResponse, ? extends Publisher<Void>> streamHandler) {
             this.streamHandler = streamHandler;
         }
 
@@ -548,16 +444,14 @@ abstract class QuicTransportConfig<CONF extends TransportConfig> extends Transpo
                                 " the incoming stream is closed."));
                     }
                     //"FutureReturnValueIgnored" this is deliberate
-                    connection.channel()
-                            .close();
+                    connection.channel().close();
                     return;
                 }
                 try {
                     if (log.isDebugEnabled()) {
-                        log.debug(format(connection.channel(), "Handler is being applied: {}"), streamHandler);
+                        log.debug(format(connection.channel(), "streamHandler正在被使用: {}"), streamHandler.getClass().getSimpleName());
                     }
-
-                    QuicStreamOperations ops = (QuicStreamOperations) connection;
+                    Http3ServerOperations ops = (Http3ServerOperations) connection;
                     Mono.fromDirect(streamHandler.apply(ops, ops))
                             .subscribe(ops.disposeSubscriber());
                 } catch (Throwable t) {
