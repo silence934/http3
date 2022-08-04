@@ -92,6 +92,7 @@ public abstract class Http3ConnectionHandler extends ChannelInboundHandlerAdapte
         if (!controlStreamCreationInProgress && Http3.getLocalControlStream(ctx.channel()) == null) {
             controlStreamCreationInProgress = true;
             QuicChannel channel = (QuicChannel) ctx.channel();
+            log.debug("QuicheQuicChannel:{},准备就绪,开始创建单向流发送Http3SettingsFrame", channel.id());
             // Once the channel became active we need to create an unidirectional stream and write the
             // Http3SettingsFrame to it. This needs to be the first frame on this stream.
             // https://tools.ietf.org/html/draft-ietf-quic-http-32#section-6.2.1.

@@ -1,13 +1,11 @@
 package xyz.nyist.test;
 
-import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.incubator.codec.quic.QuicSslContext;
 import io.netty.incubator.codec.quic.QuicSslContextBuilder;
-import io.netty.util.CharsetUtil;
 import io.netty.util.NetUtil;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
@@ -40,7 +38,7 @@ public class QuicClientTest {
                 .applicationProtocols(Http3.supportedApplicationProtocols()).build();
 
         QuicConnection client = QuicClient.create()
-                .remoteAddress(() -> new InetSocketAddress(NetUtil.LOCALHOST4, 7777))
+                .remoteAddress(() -> new InetSocketAddress(NetUtil.LOCALHOST4, 8080))
                 .bindAddress(() -> new InetSocketAddress(0))
                 .wiretap(true)
                 .secure(context)
@@ -81,7 +79,7 @@ public class QuicClientTest {
                                      })
                                      .subscribe(s -> System.out.println(i + s));
 
-                             DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/hello/world", Unpooled.wrappedBuffer("你好呀".getBytes(CharsetUtil.UTF_8)));
+                             DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "https://localhost:8080/api");
                              return out.sendObject(Mono.just(request));
                              //return out.sendString(Mono.just("request\r\n"));
                          })

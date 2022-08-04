@@ -145,6 +145,9 @@ final class Http3ControlStreamInboundHandler extends Http3FrameTypeInboundValida
         final GenericFutureListener<Future<? super QuicStreamChannel>> closeOnFailure = future -> {
             if (!future.isSuccess()) {
                 criticalStreamClosed(ctx);
+            } else {
+                Object now = future.getNow();
+                log.debug("QuicheQuicChannel{} 创建单向流QPackDecoder/QPackEncoderStream成功 {}", quicChannel.id(), now);
             }
         };
         if (qpackAttributes.dynamicTableDisabled()) {

@@ -49,7 +49,7 @@ public abstract class Http3RequestStreamInboundHandler extends ChannelInboundHan
 
     @Override
     public final void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-        logger.debug("received message :{}", msg.getClass());
+        logger.debug("received message :{}  {}", msg.getClass(), msg.toString());
         firstFrameReceived = true;
         boolean inputShutdown = ((QuicStreamChannel) ctx.channel()).isInputShutdown();
         if (msg instanceof Http3UnknownFrame) {

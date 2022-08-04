@@ -73,7 +73,7 @@ public class QuicServerTest {
 
                     return quicOutbound.sendObject(response);
                 }))
-                .bindAddress(() -> new InetSocketAddress(NetUtil.LOCALHOST4, 7777))
+                .bindAddress(() -> new InetSocketAddress(NetUtil.LOCALHOST4, 8080))
                 .wiretap(true)
                 .secure(serverCtx)
                 .idleTimeout(Duration.ofSeconds(5))
