@@ -4,10 +4,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.ByteBufHolder;
 import io.netty.buffer.Unpooled;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelInboundHandler;
-import io.netty.channel.CombinedChannelDuplexHandler;
+import io.netty.channel.*;
 import io.netty.handler.codec.ByteToMessageCodec;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import io.netty.handler.codec.http.*;
@@ -313,13 +310,6 @@ public abstract class Http3Operations<INBOUND extends NettyInbound, OUTBOUND ext
         return this;
     }
 
-    /**
-     * Returns the decoded path portion from the provided {@code uri}
-     *
-     * @param uri an HTTP URL that may contain a path with query/fragment
-     * @return the decoded path portion from the provided {@code uri}
-     */
-
 
     /**
      * Outbound Netty HttpMessage
@@ -328,6 +318,10 @@ public abstract class Http3Operations<INBOUND extends NettyInbound, OUTBOUND ext
      */
     protected abstract HttpMessage outboundHttpMessage();
 
+    @Override
+    protected void onInboundNext(ChannelHandlerContext ctx, Object msg) {
+        super.onInboundNext(ctx, msg);
+    }
 
     /**
      * Mark the headers sent

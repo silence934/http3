@@ -86,8 +86,6 @@ public final class Http3InboundStreamTrafficHandler extends ChannelInboundHandle
 
             final HttpRequest request = (HttpRequest) msg;
 
-            //todo 协议检查
-
             Connection conn = Connection.from(ctx.channel());
 
 

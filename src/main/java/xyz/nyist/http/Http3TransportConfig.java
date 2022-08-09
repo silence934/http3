@@ -28,6 +28,7 @@ import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
 import reactor.netty.Connection;
 import reactor.netty.ConnectionObserver;
+import reactor.netty.NettyPipeline;
 import reactor.netty.channel.ChannelOperations;
 import reactor.netty.resources.LoopResources;
 import reactor.netty.transport.TransportConfig;
@@ -405,8 +406,9 @@ public abstract class Http3TransportConfig<CONF extends TransportConfig> extends
                 ch.pipeline().addLast(new Http3FrameToHttpObjectCodec(true, false));
 //                        .addLast(new HttpObjectAggregator(512 * 1024));
                 //ChannelOperations.addReactiveBridge(ch, (conn, observer, msg) -> new Http3ServerOperations(conn, observer), streamListener);
-                ch.pipeline().addLast(new Http3InboundStreamTrafficHandler(streamListener));
                 ChannelOperations.addReactiveBridge(ch, ChannelOperations.OnSetup.empty(), streamListener);
+                ch.pipeline().addBefore(NettyPipeline.ReactiveBridge,
+                                        NettyPipeline.HttpTrafficHandler, new Http3InboundStreamTrafficHandler(streamListener));
             } else {
 //                ch.pipeline().addLast(new QuicOutboundStreamTrafficHandler());
 //                //todo 改动1 client

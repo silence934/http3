@@ -130,7 +130,7 @@ public class Http3ServerOperations extends Http3Operations<Http3ServerRequest, H
         this.formDecoderProvider = formDecoderProvider;
         this.mapHandle = mapHandle;
         this.nettyRequest = nettyRequest;
-        this.nettyResponse = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.NOT_FOUND);
+        this.nettyResponse = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
         if (resolvePath) {
             this.path = resolvePath(nettyRequest.uri());
         } else {
@@ -302,7 +302,7 @@ public class Http3ServerOperations extends Http3Operations<Http3ServerRequest, H
     }
 
     @Override
-    public Map<CharSequence, Set<io.netty.handler.codec.http.cookie.Cookie>> cookies() {
+    public Map<CharSequence, Set<Cookie>> cookies() {
         if (cookieHolder != null) {
             return cookieHolder.getCachedCookies();
         }
