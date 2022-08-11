@@ -70,7 +70,6 @@ public final class Http3ServerConnectionHandler extends Http3ConnectionHandler {
 
     @Override
     void initBidirectionalStream(ChannelHandlerContext ctx, QuicStreamChannel streamChannel) {
-        streamChannel.config().setAutoRead(false);
         ChannelPipeline pipeline = streamChannel.pipeline();
         Http3RequestStreamEncodeStateValidator encodeStateValidator = new Http3RequestStreamEncodeStateValidator();
         Http3RequestStreamDecodeStateValidator decodeStateValidator = new Http3RequestStreamDecodeStateValidator();

@@ -15,6 +15,7 @@
  */
 package xyz.nyist.http.server;
 
+import io.netty.channel.ChannelOption;
 import io.netty.util.NetUtil;
 import reactor.core.publisher.Mono;
 import reactor.netty.DisposableServer;
@@ -38,8 +39,8 @@ final class Http3ServerBind extends Http3Server {
     Http3ServerBind() {
         this.config = new Http3ServerConfig(
                 Collections.emptyMap(),
-                Collections.emptyMap(),
-                //Collections.singletonMap(ChannelOption.AUTO_READ, false),
+                //Collections.emptyMap(),
+                Collections.singletonMap(ChannelOption.AUTO_READ, false),
                 () -> new InetSocketAddress(NetUtil.LOCALHOST, 0));
     }
 

@@ -18,6 +18,7 @@ import io.netty.incubator.codec.quic.QuicStreamChannel;
 import io.netty.incubator.codec.quic.QuicStreamType;
 import io.netty.util.AsciiString;
 import io.netty.util.ReferenceCountUtil;
+import lombok.extern.slf4j.Slf4j;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -29,8 +30,6 @@ import reactor.netty.http.server.ServerCookies;
 import reactor.netty.http.server.WebsocketServerSpec;
 import reactor.netty.http.websocket.WebsocketInbound;
 import reactor.netty.http.websocket.WebsocketOutbound;
-import reactor.util.Logger;
-import reactor.util.Loggers;
 import reactor.util.annotation.Nullable;
 import reactor.util.context.Context;
 import xyz.nyist.http.Http3Operations;
@@ -57,11 +56,10 @@ import static reactor.netty.http.server.HttpServerState.REQUEST_DECODING_FAILED;
  * @Date: 2022/7/27 18:36
  * @Description:
  */
+@Slf4j
 public class Http3ServerOperations extends Http3Operations<Http3ServerRequest, Http3ServerResponse>
         implements Http3ServerRequest, Http3ServerResponse {
 
-
-    static final Logger log = Loggers.getLogger(Http3ServerOperations.class);
 
     final static AsciiString EVENT_STREAM = new AsciiString("text/event-stream");
 

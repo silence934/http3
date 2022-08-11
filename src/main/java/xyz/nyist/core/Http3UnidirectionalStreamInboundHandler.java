@@ -78,6 +78,13 @@ abstract class Http3UnidirectionalStreamInboundHandler extends ByteToMessageDeco
         this.unknownStreamHandlerFactory = unknownStreamHandlerFactory;
     }
 
+
+    @Override
+    public void channelActive(ChannelHandlerContext ctx) throws Exception {
+        ctx.read();
+        super.channelActive(ctx);
+    }
+
     @Override
     protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
         Channel channel = ctx.channel();
@@ -91,11 +98,11 @@ abstract class Http3UnidirectionalStreamInboundHandler extends ByteToMessageDeco
         long type = Http3CodecUtils.readVariableLengthInteger(in, len);
         switch ((int) type) {
             case HTTP3_CONTROL_STREAM_TYPE:
-                log.debug("单向流{},发来 HTTP3_CONTROL_STREAM 消息", channel);
+                log.debug("单向流{}收到HTTP3_CONTROL_STREAM 消息", channel);
                 initControlStream(ctx);
                 break;
             case HTTP3_PUSH_STREAM_TYPE:
-                log.debug("单向流{},发来 HTTP3_PUSH_STREAM 消息", channel);
+                log.debug("单向流{}收到HTTP3_PUSH_STREAM 消息", channel);
                 int pushIdLen = Http3CodecUtils.numBytesForVariableLengthInteger(in.getByte(in.readerIndex()));
                 if (in.readableBytes() < pushIdLen) {
                     return;
@@ -104,17 +111,17 @@ abstract class Http3UnidirectionalStreamInboundHandler extends ByteToMessageDeco
                 initPushStream(ctx, pushId);
                 break;
             case HTTP3_QPACK_ENCODER_STREAM_TYPE:
-                log.debug("单向流{},发来 HTTP3_QPACK_ENCODER_STREAM 消息", channel);
+                log.debug("单向流{}收到HTTP3_QPACK_ENCODER_STREAM 消息", channel);
                 // See https://quicwg.org/base-drafts/draft-ietf-quic-qpack.html#enc-dec-stream-def
                 initQpackEncoderStream(ctx);
                 break;
             case HTTP3_QPACK_DECODER_STREAM_TYPE:
-                log.debug("单向流{},发来 HTTP3_QPACK_DECODER_STREAM 消息", channel);
+                log.debug("单向流{}收到HTTP3_QPACK_DECODER_STREAM 消息", channel);
                 // See https://quicwg.org/base-drafts/draft-ietf-quic-qpack.html#enc-dec-stream-def
                 initQpackDecoderStream(ctx);
                 break;
             default:
-                log.debug("单向流{},发来未知类型[{}]消息", channel, type);
+                log.debug("单向流{}收到未知类型[{}]消息", channel, type);
                 initUnknownStream(ctx, type);
                 break;
         }
