@@ -45,8 +45,8 @@ public class ReactorHttp3HandlerAdapter implements BiFunction<Http3ServerRequest
             }
 
             return this.httpHandler.handle(request, response)
-                    .doOnError(ex -> log.warn("request.getLogPrefix() +  Failed to complete: " + ex.getMessage()))
-                    .doOnSuccess(aVoid -> log.warn("request.getLogPrefix() +Handling completed"));
+                    .doOnError(ex -> log.error(request.getLogPrefix() + "Failed to complete: " + ex.getMessage()))
+                    .doOnSuccess(aVoid -> log.debug(request.getLogPrefix() + "Handling completed"));
         } catch (URISyntaxException ex) {
             ex.printStackTrace();
             if (log.isDebugEnabled()) {

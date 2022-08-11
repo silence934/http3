@@ -108,7 +108,7 @@ public final class Http3FrameToHttpObjectCodec extends Http3RequestStreamInbound
      */
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
-        log.debug("Http3FrameToHttpObjectCodec write:" + msg.getClass());
+        log.debug("write message class :" + msg.getClass().getName());
         if (!(msg instanceof HttpObject)) {
             throw new UnsupportedMessageTypeException();
         }
@@ -119,7 +119,7 @@ public final class Http3FrameToHttpObjectCodec extends Http3RequestStreamInbound
             if (res.status().equals(HttpResponseStatus.CONTINUE)) {
                 if (res instanceof FullHttpResponse) {
                     final Http3Headers headers = toHttp3Headers(res);
-                    ctx.write(new DefaultHttp3HeadersFrame(headers));
+                    ctx.write(new DefaultHttp3HeadersFrame(headers), promise);
                     ((FullHttpResponse) res).release();
                     return;
                 } else {
@@ -131,7 +131,20 @@ public final class Http3FrameToHttpObjectCodec extends Http3RequestStreamInbound
 
         if (msg instanceof HttpMessage) {
             Http3Headers headers = toHttp3Headers((HttpMessage) msg);
-            ctx.write(new DefaultHttp3HeadersFrame(headers));
+            if (msg instanceof HttpContent) {
+                ctx.write(new DefaultHttp3HeadersFrame(headers)).addListener(f -> {
+                    if (!f.isSuccess()) {
+                        if (f.cause() != null) {
+                            promise.setFailure(f.cause());
+                        } else {
+                            promise.setFailure(new RuntimeException("http3Headers sen failed"));
+                        }
+                    }
+                });
+            } else {
+                ctx.write(new DefaultHttp3HeadersFrame(headers), promise);
+                return;
+            }
         }
 
         if (msg instanceof LastHttpContent) {
@@ -141,20 +154,21 @@ public final class Http3FrameToHttpObjectCodec extends Http3RequestStreamInbound
 
             ChannelFuture future = null;
             if (readable) {
-                future = ctx.write(new DefaultHttp3DataFrame(last.content()));
+                future = ctx.write(new DefaultHttp3DataFrame(last.content()), promise);
             }
             if (hasTrailers) {
                 Http3Headers headers = HttpConversionUtil.toHttp3Headers(last.trailingHeaders(), validateHeaders);
-                future = ctx.write(new DefaultHttp3HeadersFrame(headers));
+                future = ctx.write(new DefaultHttp3HeadersFrame(headers), promise);
             }
             if (!readable) {
                 last.release();
+                ((QuicStreamChannel) ctx.channel()).shutdownOutput();
             }
             if (future != null) {
                 future.addListener(QuicStreamChannel.SHUTDOWN_OUTPUT);
             }
         } else if (msg instanceof HttpContent) {
-            ctx.write(new DefaultHttp3DataFrame(((HttpContent) msg).content()));
+            ctx.write(new DefaultHttp3DataFrame(((HttpContent) msg).content()), promise);
         }
     }
 

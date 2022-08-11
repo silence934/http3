@@ -64,10 +64,11 @@ class ReactorServerHttp3Request extends AbstractServerHttpRequest {
 
     private static final AtomicLong logPrefixIndex = new AtomicLong();
 
-
     private final Http3ServerRequest request;
 
     private final NettyDataBufferFactory bufferFactory;
+
+    private String logPrefix;
 
 
     public ReactorServerHttp3Request(Http3ServerRequest request, NettyDataBufferFactory bufferFactory)
@@ -217,6 +218,14 @@ class ReactorServerHttp3Request extends AbstractServerHttpRequest {
                     "-" + logPrefixIndex.incrementAndGet();
         }
         return getId();
+    }
+
+
+    String getLogPrefix() {
+        if (this.logPrefix == null) {
+            this.logPrefix = "[" + initLogPrefix() + "] ";
+        }
+        return this.logPrefix;
     }
 
     private static class ChannelOperationsIdHelper {

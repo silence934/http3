@@ -20,6 +20,7 @@ import reactor.util.Loggers;
 import reactor.util.annotation.Nullable;
 
 import java.net.URI;
+import java.nio.file.Path;
 import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
@@ -223,18 +224,35 @@ public abstract class Http3Operations<INBOUND extends NettyInbound, OUTBOUND ext
         }), this, b);
     }
 
+
+    @Override
+    public final NettyOutbound sendFile(Path file, long position, long count) {
+        Objects.requireNonNull(file);
+
+        if (hasSentHeaders()) {
+            return super.sendFile(file, position, count);
+        }
+
+        if (!HttpUtil.isTransferEncodingChunked(outboundHttpMessage()) && !HttpUtil.isContentLengthSet(
+                outboundHttpMessage()) && count < Integer.MAX_VALUE) {
+            outboundHttpMessage().headers()
+                    .setInt(HttpHeaderNames.CONTENT_LENGTH, (int) count);
+        } else if (!HttpUtil.isContentLengthSet(outboundHttpMessage())) {
+            outboundHttpMessage().headers()
+                    .remove(HttpHeaderNames.CONTENT_LENGTH)
+                    .remove(HttpHeaderNames.TRANSFER_ENCODING);
+            HttpUtil.setTransferEncodingChunked(outboundHttpMessage(), true);
+        }
+
+        return super.sendFile(file, position, count);
+    }
+
+
     @Override
     public Mono<Void> then() {
         if (!channel().isActive()) {
             return Mono.error(AbortedException.beforeSend());
         }
-
-//        if (true) {
-//            return Mono.defer(() -> {
-//                System.out.println("Http3Operations的then()");
-//                return Mono.empty();
-//            });
-//        }
 
         if (hasSentHeaders()) {
             return Mono.empty();

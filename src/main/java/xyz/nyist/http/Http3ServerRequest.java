@@ -124,7 +124,7 @@ public interface Http3ServerRequest extends NettyInbound, Http3StreamInfo {
      * @return a {@link Flux} of {@link HttpData} containing received {@link Attribute}/{@link FileUpload}
      * @since 1.0.11
      */
-    Flux<HttpData> receiveForm(Consumer<HttpServerFormDecoderProvider.Builder> formDecoderBuilder);
+    Flux<HttpData> receiveForm(Consumer<Http3ServerFormDecoderProvider.Builder> formDecoderBuilder);
 
     /**
      * Returns the address of the host peer or {@code null} in case of Unix Domain Sockets.

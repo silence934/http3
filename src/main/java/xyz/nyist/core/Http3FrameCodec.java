@@ -519,7 +519,7 @@ final class Http3FrameCodec extends ByteToMessageDecoder implements ChannelOutbo
     }
 
     private void write0(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) {
-        log.debug("send message,message type:{}", msg.getClass());
+        log.debug("send message,message class type:{}", msg.getClass().getName());
         try {
             if (msg instanceof Http3DataFrame) {
                 writeDataFrame(ctx, (Http3DataFrame) msg, promise);

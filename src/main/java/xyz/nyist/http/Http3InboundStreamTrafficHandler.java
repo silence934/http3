@@ -19,7 +19,6 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.socket.ChannelInputShutdownReadComplete;
 import io.netty.handler.codec.http.HttpRequest;
-import io.netty.handler.ssl.SslHandler;
 import reactor.netty.Connection;
 import reactor.netty.ConnectionObserver;
 import reactor.netty.channel.ChannelOperations;
@@ -50,7 +49,6 @@ public final class Http3InboundStreamTrafficHandler extends ChannelInboundHandle
 
     ChannelHandlerContext ctx;
 
-    Boolean secure;
 
     Queue<Object> pipelined;
 
@@ -73,9 +71,6 @@ public final class Http3InboundStreamTrafficHandler extends ChannelInboundHandle
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Http3Exception {
-        if (secure == null) {
-            secure = ctx.channel().pipeline().get(SslHandler.class) != null;
-        }
         if (remoteAddress == null) {
             remoteAddress =
                     Optional.ofNullable(HAProxyMessageReader.resolveRemoteAddressFromProxyProtocol(ctx.channel()))
@@ -93,7 +88,7 @@ public final class Http3InboundStreamTrafficHandler extends ChannelInboundHandle
                                                                   null,
                                                                   ConnectionInfo.from(ctx.channel(),
                                                                                       request,
-                                                                                      secure,
+                                                                                      true,
                                                                                       remoteAddress,
                                                                                       forwardedHeaderHandler),
                                                                   new Http3ServerFormDecoderProvider.Build().build(),

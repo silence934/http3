@@ -210,7 +210,7 @@ public final class Http3ServerConfig extends Http3TransportConfig<Http3ServerCon
 
         final Map<AttributeKey<?>, ?> streamAttrs;
 
-        final ConnectionObserver streamObserver;
+        //final ConnectionObserver streamObserver;
 
         final Map<ChannelOption<?>, ?> streamOptions;
 
@@ -240,7 +240,7 @@ public final class Http3ServerConfig extends Http3TransportConfig<Http3ServerCon
             this.recvQueueLen = config.recvQueueLen;
             this.sendQueueLen = config.sendQueueLen;
             this.streamAttrs = config.streamAttrs;
-            this.streamObserver = config.streamObserver.then(new QuicStreamChannelObserver(config.streamHandler));
+            //this.streamObserver = config.streamObserver.then(new QuicStreamChannelObserver(config.streamHandler));
             this.streamOptions = config.streamOptions;
             this.sslEngineProvider = config.sslEngineProvider;
             this.tokenHandler = config.tokenHandler;
@@ -392,7 +392,7 @@ public final class Http3ServerConfig extends Http3TransportConfig<Http3ServerCon
             pipeline.remove(NettyPipeline.ReactiveBridge);
 
             pipeline.addLast(new Http3ServerConnectionHandler(
-                            streamChannelInitializer(loggingHandler, streamObserver.then(new QuicStreamChannelObserver(streamHandler)), true)
+                            streamChannelInitializer(loggingHandler, streamObserver, true)
                     ))
                     .addLast(NettyPipeline.ReactiveBridge,
                              new QuicChannelInboundHandler(observer, loggingHandler, streamAttrs, streamObserver, streamOptions));

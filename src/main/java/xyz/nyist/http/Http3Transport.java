@@ -20,7 +20,6 @@ import io.netty.channel.ChannelOption;
 import io.netty.channel.unix.DomainSocketAddress;
 import io.netty.incubator.codec.quic.*;
 import io.netty.util.AttributeKey;
-import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscription;
 import reactor.core.CoreSubscriber;
 import reactor.core.publisher.Mono;
@@ -48,7 +47,6 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.time.Duration;
 import java.util.Objects;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -220,20 +218,6 @@ public abstract class Http3Transport<T extends Transport<T, CONF>, CONF extends 
         return dup;
     }
 
-    /**
-     * Attach an IO handler to react on incoming stream.
-     * <p>Note: If an IO handler is not specified the incoming streams will be closed automatically.
-     *
-     * @param streamHandler an IO handler that can dispose underlying connection when {@link Publisher} terminates.
-     * @return a {@link Http3Transport} reference
-     */
-    public final T handleStream(
-            BiFunction<? super Http3ServerRequest, ? super Http3ServerResponse, ? extends Publisher<Void>> streamHandler) {
-        Objects.requireNonNull(streamHandler, "streamHandler");
-        T dup = duplicate();
-        dup.configuration().streamHandler = streamHandler;
-        return dup;
-    }
 
     /**
      * Enable/disable Hystart.

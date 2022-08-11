@@ -24,7 +24,6 @@ import reactor.core.publisher.Mono;
 import reactor.netty.*;
 import reactor.netty.channel.AbortedException;
 import reactor.netty.channel.ChannelOperations;
-import reactor.netty.http.server.HttpServerFormDecoderProvider;
 import reactor.netty.http.server.HttpServerState;
 import reactor.netty.http.server.ServerCookies;
 import reactor.netty.http.server.WebsocketServerSpec;
@@ -40,10 +39,7 @@ import xyz.nyist.http.Http3ServerRequest;
 import xyz.nyist.http.Http3ServerResponse;
 import xyz.nyist.http.temp.ConnectionInfo;
 
-import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
@@ -404,13 +400,12 @@ public class Http3ServerOperations extends Http3Operations<Http3ServerRequest, H
     }
 
     @Override
-    public Flux<HttpData> receiveForm(Consumer<HttpServerFormDecoderProvider.Builder> formDecoderBuilder) {
+    public Flux<HttpData> receiveForm(Consumer<Http3ServerFormDecoderProvider.Builder> formDecoderBuilder) {
         Objects.requireNonNull(formDecoderBuilder, "formDecoderBuilder");
-        //HttpServerFormDecoderProvider.Build builder = new HttpServerFormDecoderProvider.Build();
-        //formDecoderBuilder.accept(builder);
-        //HttpServerFormDecoderProvider config = builder.build();
-        //return receiveFormInternal(config);
-        return null;
+        Http3ServerFormDecoderProvider.Build builder = new Http3ServerFormDecoderProvider.Build();
+        formDecoderBuilder.accept(builder);
+        Http3ServerFormDecoderProvider config = builder.build();
+        return receiveFormInternal(config);
     }
 
     @Override
@@ -463,11 +458,7 @@ public class Http3ServerOperations extends Http3Operations<Http3ServerRequest, H
 
     @Override
     public String scheme() {
-        if (connectionInfo != null) {
-            return this.connectionInfo.getScheme();
-        } else {
-            return scheme;
-        }
+        return "https";
     }
 
     @Override
@@ -485,17 +476,6 @@ public class Http3ServerOperations extends Http3Operations<Http3ServerRequest, H
         }
     }
 
-    @Override
-    public NettyOutbound sendFile(Path file) {
-        try {
-            return sendFile(file, 0L, Files.size(file));
-        } catch (IOException e) {
-            if (log.isDebugEnabled()) {
-                log.debug(format(channel(), "Path not resolved"), e);
-            }
-            return then(sendNotFound());
-        }
-    }
 
     @Override
     public Mono<Void> sendNotFound() {

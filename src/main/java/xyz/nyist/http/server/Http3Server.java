@@ -17,14 +17,25 @@ package xyz.nyist.http.server;
 
 import io.netty.incubator.codec.quic.QuicConnectionIdGenerator;
 import io.netty.incubator.codec.quic.QuicTokenHandler;
+import org.reactivestreams.Publisher;
+import reactor.core.publisher.Mono;
+import reactor.netty.Connection;
+import reactor.netty.ConnectionObserver;
+import reactor.netty.http.server.HttpServerState;
 import reactor.netty.transport.AddressUtils;
 import reactor.util.Logger;
 import reactor.util.Loggers;
+import reactor.util.context.Context;
+import xyz.nyist.http.Http3ServerRequest;
+import xyz.nyist.http.Http3ServerResponse;
 import xyz.nyist.http.Http3Transport;
 import xyz.nyist.quic.QuicConnection;
 
 import java.util.Objects;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
+
+import static reactor.netty.ReactorNetty.format;
 
 /**
  * A QuicServer allows building in a safe immutable way a QUIC server that is materialized
@@ -125,6 +136,57 @@ public abstract class Http3Server extends Http3Transport<Http3Server, Http3Serve
         Http3Server dup = duplicate();
         dup.configuration().tokenHandler = tokenHandler;
         return dup;
+    }
+
+
+    /**
+     * Attach an IO handler to react on incoming stream.
+     * <p>Note: If an IO handler is not specified the incoming streams will be closed automatically.
+     *
+     * @param streamHandler an IO handler that can dispose underlying connection when {@link Publisher} terminates.
+     * @return a {@link Http3Transport} reference
+     */
+    public final Http3Server handleStream(
+            BiFunction<? super Http3ServerRequest, ? super Http3ServerResponse, ? extends Publisher<Void>> streamHandler) {
+        Objects.requireNonNull(streamHandler, "streamHandler");
+        return streamObserve(new Http3ServerHandle(streamHandler));
+    }
+
+    static final class Http3ServerHandle implements ConnectionObserver {
+
+        final BiFunction<? super Http3ServerRequest, ? super Http3ServerResponse, ? extends Publisher<Void>> handler;
+
+        Http3ServerHandle(BiFunction<? super Http3ServerRequest, ? super Http3ServerResponse, ? extends Publisher<Void>> handler) {
+            this.handler = handler;
+        }
+
+        @Override
+        @SuppressWarnings("FutureReturnValueIgnored")
+        public void onStateChange(Connection connection, State newState) {
+            if (newState == HttpServerState.REQUEST_RECEIVED) {
+                try {
+                    if (log.isDebugEnabled()) {
+                        log.debug(format(connection.channel(), "Handler is being applied: {}"), handler);
+                    }
+                    Http3ServerOperations ops = (Http3ServerOperations) connection;
+                    Publisher<Void> publisher = handler.apply(ops, ops);
+                    Mono<Void> mono = Mono.deferContextual(ctx -> {
+                        ops.currentContext = Context.of(ctx);
+                        return Mono.fromDirect(publisher);
+                    });
+                    if (ops.mapHandle != null) {
+                        mono = ops.mapHandle.apply(mono, connection);
+                    }
+                    mono.subscribe(ops.disposeSubscriber());
+                } catch (Throwable t) {
+                    log.error(format(connection.channel(), ""), t);
+                    //"FutureReturnValueIgnored" this is deliberate
+                    connection.channel()
+                            .close();
+                }
+            }
+        }
+
     }
 
 }
