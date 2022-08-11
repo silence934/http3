@@ -1,4 +1,4 @@
-package xyz.nyist.http.test;
+package xyz.nyist.test;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;

@@ -56,13 +56,13 @@ class ReactorServerHttp3Request extends AbstractServerHttpRequest {
     /**
      * Reactor Netty 1.0.5+.
      */
-    static final boolean reactorNettyRequestChannelOperationsIdPresent = ClassUtils.isPresent(
+    static final boolean REACTOR_NETTY_REQUEST_CHANNEL_OPERATIONS_ID_PRESENT = ClassUtils.isPresent(
             "reactor.netty.ChannelOperationsId", ReactorServerHttp3Request.class.getClassLoader());
 
     private static final Log logger = HttpLogging.forLogName(ReactorServerHttp3Request.class);
 
 
-    private static final AtomicLong logPrefixIndex = new AtomicLong();
+    private static final AtomicLong LOG_PREFIX_INDEX = new AtomicLong();
 
     private final Http3ServerRequest request;
 
@@ -200,14 +200,14 @@ class ReactorServerHttp3Request extends AbstractServerHttpRequest {
     protected String initId() {
         if (this.request instanceof Connection) {
             return ((Connection) this.request).channel().id().asShortText() +
-                    "-" + logPrefixIndex.incrementAndGet();
+                    "-" + LOG_PREFIX_INDEX.incrementAndGet();
         }
         return null;
     }
 
     @Override
     protected String initLogPrefix() {
-        if (reactorNettyRequestChannelOperationsIdPresent) {
+        if (REACTOR_NETTY_REQUEST_CHANNEL_OPERATIONS_ID_PRESENT) {
             String id = (ChannelOperationsIdHelper.getId(this.request));
             if (id != null) {
                 return id;
@@ -215,7 +215,7 @@ class ReactorServerHttp3Request extends AbstractServerHttpRequest {
         }
         if (this.request instanceof Connection) {
             return ((Connection) this.request).channel().id().asShortText() +
-                    "-" + logPrefixIndex.incrementAndGet();
+                    "-" + LOG_PREFIX_INDEX.incrementAndGet();
         }
         return getId();
     }

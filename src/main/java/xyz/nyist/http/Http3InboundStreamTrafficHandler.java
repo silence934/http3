@@ -27,10 +27,8 @@ import reactor.util.Loggers;
 import xyz.nyist.core.Http3Exception;
 import xyz.nyist.http.server.Http3ServerOperations;
 import xyz.nyist.http.temp.ConnectionInfo;
-import xyz.nyist.http.temp.HAProxyMessageReader;
 
 import java.net.SocketAddress;
-import java.util.Optional;
 import java.util.Queue;
 import java.util.function.BiFunction;
 
@@ -72,9 +70,9 @@ public final class Http3InboundStreamTrafficHandler extends ChannelInboundHandle
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Http3Exception {
         if (remoteAddress == null) {
-            remoteAddress =
-                    Optional.ofNullable(HAProxyMessageReader.resolveRemoteAddressFromProxyProtocol(ctx.channel()))
-                            .orElse(ctx.channel().remoteAddress());
+            remoteAddress = ctx.channel().remoteAddress();
+//                    Optional.ofNullable(HAProxyMessageReader.resolveRemoteAddressFromProxyProtocol(ctx.channel()))
+//                            .orElse(ctx.channel().remoteAddress());
         }
         // read message and track if it was keepAlive
         if (msg instanceof HttpRequest) {
@@ -91,9 +89,8 @@ public final class Http3InboundStreamTrafficHandler extends ChannelInboundHandle
                                                                                       true,
                                                                                       remoteAddress,
                                                                                       forwardedHeaderHandler),
-                                                                  new Http3ServerFormDecoderProvider.Build().build(),
+                                                                  Http3ServerFormDecoderProvider.DEFAULT_FORM_DECODER_SPEC,
                                                                   null,
-                                                                  true,
                                                                   true
             );
             ops.bind();

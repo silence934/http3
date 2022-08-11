@@ -11,8 +11,6 @@ import io.netty.handler.codec.http.*;
 import io.netty.handler.codec.http.cookie.Cookie;
 import io.netty.handler.codec.http.cookie.ServerCookieDecoder;
 import io.netty.handler.codec.http.cookie.ServerCookieEncoder;
-import io.netty.handler.codec.http.multipart.HttpData;
-import io.netty.handler.codec.http.multipart.HttpPostRequestDecoder;
 import io.netty.handler.codec.http2.HttpConversionUtil;
 import io.netty.incubator.codec.quic.QuicStreamChannel;
 import io.netty.incubator.codec.quic.QuicStreamType;
@@ -91,7 +89,6 @@ public class Http3ServerOperations extends Http3Operations<Http3ServerRequest, H
 
     final HttpHeaders responseHeaders;
 
-    final String scheme;
 
     Function<? super String, Map<String, String>> paramsResolver;
 
@@ -110,8 +107,7 @@ public class Http3ServerOperations extends Http3Operations<Http3ServerRequest, H
                                  @Nullable ConnectionInfo connectionInfo,
                                  Http3ServerFormDecoderProvider formDecoderProvider,
                                  @Nullable BiFunction<? super Mono<Void>, ? super Connection, ? extends Mono<Void>> mapHandle,
-                                 boolean resolvePath,
-                                 boolean secured) {
+                                 boolean resolvePath) {
         super(c, listener);
 
 
@@ -132,7 +128,6 @@ public class Http3ServerOperations extends Http3Operations<Http3ServerRequest, H
         }
         this.responseHeaders = nettyResponse.headers();
         this.responseHeaders.set(HttpHeaderNames.TRANSFER_ENCODING, HttpHeaderValues.CHUNKED);
-        this.scheme = secured ? "https" : "http";
     }
 
     static void cleanHandlerTerminate(Channel ch) {
@@ -286,14 +281,6 @@ public class Http3ServerOperations extends Http3Operations<Http3ServerRequest, H
         return this;
     }
 
-    @Override
-    public Http3ServerOperations chunkedTransfer(boolean chunked) {
-        if (!hasSentHeaders() && isTransferEncodingChunked(nettyResponse) != chunked) {
-            responseHeaders.remove(HttpHeaderNames.TRANSFER_ENCODING);
-            HttpUtil.setTransferEncodingChunked(nettyResponse, chunked);
-        }
-        return this;
-    }
 
     @Override
     public Map<CharSequence, Set<Cookie>> cookies() {
@@ -337,20 +324,8 @@ public class Http3ServerOperations extends Http3Operations<Http3ServerRequest, H
     }
 
     @Override
-    public boolean isFormUrlencoded() {
-        CharSequence mimeType = HttpUtil.getMimeType(nettyRequest);
-        return mimeType != null &&
-                HttpHeaderValues.APPLICATION_X_WWW_FORM_URLENCODED.contentEqualsIgnoreCase(mimeType.toString().trim());
-    }
-
-    @Override
     public boolean isKeepAlive() {
         return HttpUtil.isKeepAlive(nettyRequest);
-    }
-
-    @Override
-    public boolean isMultipart() {
-        return HttpPostRequestDecoder.isMultipart(nettyRequest);
     }
 
 
@@ -369,42 +344,6 @@ public class Http3ServerOperations extends Http3Operations<Http3ServerRequest, H
         return nettyRequest.method();
     }
 
-    @Override
-    @Nullable
-    public String param(CharSequence key) {
-        Objects.requireNonNull(key, "key");
-        Map<String, String> params = null;
-        if (paramsResolver != null) {
-            params = this.paramsResolver.apply(uri());
-        }
-        return null != params ? params.get(key.toString()) : null;
-    }
-
-    @Override
-    @Nullable
-    public Map<String, String> params() {
-        return null != paramsResolver ? paramsResolver.apply(uri()) : null;
-    }
-
-    @Override
-    public Http3ServerRequest paramsResolver(Function<? super String, Map<String, String>> paramsResolver) {
-        this.paramsResolver = paramsResolver;
-        return this;
-    }
-
-    @Override
-    public Flux<HttpData> receiveForm() {
-        return receiveFormInternal(formDecoderProvider);
-    }
-
-    @Override
-    public Flux<HttpData> receiveForm(Consumer<Http3ServerFormDecoderProvider.Builder> formDecoderBuilder) {
-        Objects.requireNonNull(formDecoderBuilder, "formDecoderBuilder");
-        Http3ServerFormDecoderProvider.Build builder = new Http3ServerFormDecoderProvider.Build();
-        formDecoderBuilder.accept(builder);
-        Http3ServerFormDecoderProvider config = builder.build();
-        return receiveFormInternal(config);
-    }
 
     @Override
     public Flux<?> receiveObject() {
@@ -732,43 +671,6 @@ public class Http3ServerOperations extends Http3Operations<Http3ServerRequest, H
         return nettyResponse;
     }
 
-    final Flux<HttpData> receiveFormInternal(Http3ServerFormDecoderProvider config) {
-        boolean isMultipart = isMultipart();
-
-        if (!Objects.equals(method(), HttpMethod.POST) || !(isFormUrlencoded() || isMultipart)) {
-            return Flux.error(new IllegalStateException(
-                    "Request is not POST or does not have Content-Type " +
-                            "with value 'application/x-www-form-urlencoded' or 'multipart/form-data'"));
-        }
-        return Flux.defer(() ->
-                                  config.newHttpPostRequestDecoder(nettyRequest, isMultipart).flatMapMany(decoder ->
-                                                                                                                  receiveObject() // receiveContent uses filter operator, this operator buffers, but we don't want it
-                                                                                                                          .concatMap(object -> {
-                                                                                                                              if (!(object instanceof HttpContent)) {
-                                                                                                                                  //decoder;
-                                                                                                                                  return Mono.empty();
-                                                                                                                              }
-                                                                                                                              HttpContent httpContent = (HttpContent) object;
-                                                                                                                              if (config.maxInMemorySize > -1) {
-                                                                                                                                  httpContent.retain();
-                                                                                                                              }
-                                                                                                                              return config.maxInMemorySize == -1 ?
-                                                                                                                                      Flux.using(
-                                                                                                                                              () -> decoder.offer(httpContent),
-                                                                                                                                              d -> Flux.fromIterable(decoder.currentHttpData(!config.streaming())),
-                                                                                                                                              d -> decoder.cleanCurrentHttpData(!config.streaming())) :
-                                                                                                                                      Flux.usingWhen(
-                                                                                                                                              Mono.fromCallable(() -> decoder.offer(httpContent))
-                                                                                                                                                      .subscribeOn(config.scheduler)
-                                                                                                                                                      .doFinally(sig -> httpContent.release()),
-                                                                                                                                              d -> Flux.fromIterable(decoder.currentHttpData(true)),
-                                                                                                                                              // FIXME Can we have cancellation for the resourceSupplier that will
-                                                                                                                                              // cause this one to not be invoked?
-                                                                                                                                              d -> Mono.fromRunnable(() -> decoder.cleanCurrentHttpData(true)));
-                                                                                                                          }, 0) // There is no need of prefetch, we already have the buffers in the Reactor Netty inbound queue
-                                                                                                                          .doFinally(sig -> decoder.destroy())));
-    }
-
 
     final Mono<Void> withWebsocketSupport(String url,
                                           WebsocketServerSpec websocketServerSpec,
@@ -790,7 +692,7 @@ public class Http3ServerOperations extends Http3Operations<Http3ServerRequest, H
 
 
             super(c, listener, nettyRequest, null, null,
-                  DEFAULT_FORM_DECODER_SPEC, null, false, secure);
+                  DEFAULT_FORM_DECODER_SPEC, null, false);
             this.customResponse = nettyResponse;
             String tempPath = "";
             try {

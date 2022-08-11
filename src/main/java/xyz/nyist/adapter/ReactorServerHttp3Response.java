@@ -128,8 +128,7 @@ public class ReactorServerHttp3Response extends AbstractServerHttpResponse imple
     @Override
     protected void touchDataBuffer(DataBuffer buffer) {
         if (logger.isDebugEnabled()) {
-            //if (ReactorServerHttpRequest.reactorNettyRequestChannelOperationsIdPresent) {
-            if (true) {
+            if (ReactorServerHttp3Request.REACTOR_NETTY_REQUEST_CHANNEL_OPERATIONS_ID_PRESENT) {
                 if (ChannelOperationsIdHelper.touch(buffer, this.response)) {
                     return;
                 }

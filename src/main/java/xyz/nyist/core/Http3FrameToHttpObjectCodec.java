@@ -124,7 +124,7 @@ public final class Http3FrameToHttpObjectCodec extends Http3RequestStreamInbound
                     return;
                 } else {
                     throw new EncoderException(
-                            HttpResponseStatus.CONTINUE.toString() + " must be a FullHttpResponse");
+                            HttpResponseStatus.CONTINUE + " must be a FullHttpResponse");
                 }
             }
         }

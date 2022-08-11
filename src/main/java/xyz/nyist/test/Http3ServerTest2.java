@@ -1,4 +1,4 @@
-package xyz.nyist.http.test;
+package xyz.nyist.test;
 
 import io.netty.handler.ssl.util.SelfSignedCertificate;
 import io.netty.incubator.codec.quic.InsecureQuicTokenHandler;

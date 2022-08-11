@@ -49,13 +49,6 @@ public interface Http3ServerResponse extends NettyOutbound, Http3StreamInfo {
      */
     Http3ServerResponse addHeader(CharSequence name, CharSequence value);
 
-    /**
-     * Sets Transfer-Encoding header
-     *
-     * @param chunked true if Transfer-Encoding: chunked
-     * @return this {@link Http3ServerResponse}
-     */
-    Http3ServerResponse chunkedTransfer(boolean chunked);
 
     @Override
     Http3ServerResponse withConnection(Consumer<? super Connection> withConnection);
