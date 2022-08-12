@@ -7,7 +7,10 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
 import io.netty.handler.codec.ByteToMessageCodec;
 import io.netty.handler.codec.ByteToMessageDecoder;
-import io.netty.handler.codec.http.*;
+import io.netty.handler.codec.http.FullHttpMessage;
+import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
@@ -18,6 +21,9 @@ import reactor.netty.http.HttpInfos;
 import reactor.util.Logger;
 import reactor.util.Loggers;
 import reactor.util.annotation.Nullable;
+import xyz.nyist.core.Http3Headers;
+import xyz.nyist.core.Http3HeadersFrame;
+import xyz.nyist.core.Http3Util;
 
 import java.net.URI;
 import java.nio.file.Path;
@@ -29,6 +35,7 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
+import static io.netty.util.internal.ObjectUtil.checkNotNull;
 import static reactor.netty.ReactorNetty.format;
 import static reactor.netty.ReactorNetty.toPrettyHexDump;
 
@@ -92,12 +99,7 @@ public abstract class Http3Operations<INBOUND extends NettyInbound, OUTBOUND ext
         ((Http3Operations<?, ?>) ops).terminate();
     }
 
-    /**
-     * Returns the decoded path portion from the provided {@code uri}
-     *
-     * @param uri an HTTP URL that may contain a path with query/fragment
-     * @return the decoded path portion from the provided {@code uri}
-     */
+
     public static String resolvePath(String uri) {
         Objects.requireNonNull(uri, "uri");
 
@@ -129,6 +131,21 @@ public abstract class Http3Operations<INBOUND extends NettyInbound, OUTBOUND ext
         return URI.create(tempUri)
                 .getPath();
     }
+
+
+    public static CharSequence extractPath(Http3Headers headers) {
+        final CharSequence method = checkNotNull(headers.method(),
+                                                 "method header cannot be null in conversion to HTTP/1.x");
+        if (HttpMethod.CONNECT.asciiName().contentEqualsIgnoreCase(method)) {
+            // See https://tools.ietf.org/html/rfc7231#section-4.3.6
+            return checkNotNull(headers.authority(),
+                                "authority header cannot be null in the conversion to HTTP/1.x");
+        } else {
+            return checkNotNull(headers.path(),
+                                "path header cannot be null in conversion to HTTP/1.x");
+        }
+    }
+
 
     static void autoAddHttpExtractor(Connection c, String name, ChannelHandler handler) {
 
@@ -179,13 +196,13 @@ public abstract class Http3Operations<INBOUND extends NettyInbound, OUTBOUND ext
                                                                     ReferenceCountUtil.release(msg);
                                                                     return Mono.error(e);
                                                                 }
-                                                                if (HttpUtil.getContentLength(outboundHttpMessage(), -1) == 0) {
+                                                                if (Http3Util.getContentLength(outboundHttpMessage(), -1) == 0) {
                                                                     log.debug(format(channel(), "Dropped HTTP content, " +
                                                                             "since response has Content-Length: 0 {}"), toPrettyHexDump(msg));
                                                                     msg.release();
-                                                                    return FutureMono.from(channel().writeAndFlush(newFullBodyMessage(Unpooled.EMPTY_BUFFER)));
+                                                                    return FutureMono.from(writeMessage(Unpooled.EMPTY_BUFFER));
                                                                 }
-                                                                return FutureMono.from(channel().writeAndFlush(newFullBodyMessage(msg)));
+                                                                return FutureMono.from(writeMessage(msg));
                                                             }
                                                             return FutureMono.from(channel().writeAndFlush(msg));
                                                         })
@@ -212,13 +229,13 @@ public abstract class Http3Operations<INBOUND extends NettyInbound, OUTBOUND ext
                     b.release();
                     throw e;
                 }
-                if (HttpUtil.getContentLength(outboundHttpMessage(), -1) == 0) {
+                if (Http3Util.getContentLength(outboundHttpMessage(), -1) == 0) {
                     log.debug(format(channel(), "Dropped HTTP content, " +
                             "since response has Content-Length: 0 {}"), toPrettyHexDump(b));
                     b.release();
-                    return channel().writeAndFlush(newFullBodyMessage(Unpooled.EMPTY_BUFFER));
+                    return writeMessage(Unpooled.EMPTY_BUFFER);
                 }
-                return channel().writeAndFlush(newFullBodyMessage(b));
+                return writeMessage(b);
             }
             return channel().writeAndFlush(b);
         }), this, b);
@@ -233,15 +250,15 @@ public abstract class Http3Operations<INBOUND extends NettyInbound, OUTBOUND ext
             return super.sendFile(file, position, count);
         }
 
-        if (!HttpUtil.isTransferEncodingChunked(outboundHttpMessage()) && !HttpUtil.isContentLengthSet(
+        if (!Http3Util.isTransferEncodingChunked(outboundHttpMessage()) && !Http3Util.isContentLengthSet(
                 outboundHttpMessage()) && count < Integer.MAX_VALUE) {
             outboundHttpMessage().headers()
                     .setInt(HttpHeaderNames.CONTENT_LENGTH, (int) count);
-        } else if (!HttpUtil.isContentLengthSet(outboundHttpMessage())) {
-            outboundHttpMessage().headers()
-                    .remove(HttpHeaderNames.CONTENT_LENGTH)
-                    .remove(HttpHeaderNames.TRANSFER_ENCODING);
-            HttpUtil.setTransferEncodingChunked(outboundHttpMessage(), true);
+        } else if (!Http3Util.isContentLengthSet(outboundHttpMessage())) {
+            Http3Headers headers = outboundHttpMessage().headers();
+            headers.remove(HttpHeaderNames.CONTENT_LENGTH);
+            headers.remove(HttpHeaderNames.TRANSFER_ENCODING);
+            Http3Util.setTransferEncodingChunked(outboundHttpMessage(), true);
         }
 
         return super.sendFile(file, position, count);
@@ -260,17 +277,17 @@ public abstract class Http3Operations<INBOUND extends NettyInbound, OUTBOUND ext
 
         return FutureMono.deferFuture(() -> {
             if (markSentHeaders(outboundHttpMessage())) {
-                HttpMessage msg;
+                Http3HeadersFrame msg;
 
-                if (HttpUtil.isContentLengthSet(outboundHttpMessage())) {
-                    outboundHttpMessage().headers()
-                            .remove(HttpHeaderNames.TRANSFER_ENCODING);
-                    if (HttpUtil.getContentLength(outboundHttpMessage(), 0) == 0) {
-                        markSentBody();
-                        msg = newFullBodyMessage(Unpooled.EMPTY_BUFFER);
+                if (Http3Util.isContentLengthSet(outboundHttpMessage())) {
+                    outboundHttpMessage().headers().remove(HttpHeaderNames.TRANSFER_ENCODING);
+                    if (Http3Util.getContentLength(outboundHttpMessage(), 0) == 0) {
+                        //todo heads设置了contentLength=0
+                        // markSentBody();
+                        // msg = newFullBodyMessage(Unpooled.EMPTY_BUFFER);
                     } else {
-                        msg = outboundHttpMessage();
                     }
+                    msg = outboundHttpMessage();
                 } else {
                     msg = outboundHttpMessage();
                 }
@@ -313,7 +330,7 @@ public abstract class Http3Operations<INBOUND extends NettyInbound, OUTBOUND ext
 
     protected abstract void onHeadersSent();
 
-    protected abstract HttpMessage newFullBodyMessage(ByteBuf body);
+    protected abstract ChannelFuture writeMessage(ByteBuf body);
 
     @Override
     @SuppressWarnings("deprecation")
@@ -334,7 +351,7 @@ public abstract class Http3Operations<INBOUND extends NettyInbound, OUTBOUND ext
      *
      * @return Outbound Netty HttpMessage
      */
-    protected abstract HttpMessage outboundHttpMessage();
+    protected abstract Http3HeadersFrame outboundHttpMessage();
 
     @Override
     protected void onInboundNext(ChannelHandlerContext ctx, Object msg) {

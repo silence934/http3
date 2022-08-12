@@ -36,6 +36,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.netty.ChannelOperationsId;
 import reactor.netty.http.server.HttpServerResponse;
+import xyz.nyist.core.Http3Exception;
 import xyz.nyist.http.Http3ServerResponse;
 
 import java.nio.file.Path;
@@ -56,8 +57,8 @@ public class ReactorServerHttp3Response extends AbstractServerHttpResponse imple
     private final Http3ServerResponse response;
 
 
-    public ReactorServerHttp3Response(Http3ServerResponse response, DataBufferFactory bufferFactory) {
-        super(bufferFactory, new HttpHeaders(new Netty3HeadersAdapter(response.responseHeaders())));
+    public ReactorServerHttp3Response(Http3ServerResponse response, DataBufferFactory bufferFactory) throws Http3Exception {
+        super(bufferFactory, new HttpHeaders(new Netty3HeadersAdapter(response.responseHeaders(), false)));
         Assert.notNull(response, "HttpServerResponse must not be null");
         this.response = response;
     }
@@ -72,13 +73,13 @@ public class ReactorServerHttp3Response extends AbstractServerHttpResponse imple
     @Override
     public HttpStatus getStatusCode() {
         HttpStatus status = super.getStatusCode();
-        return (status != null ? status : HttpStatus.resolve(this.response.status().code()));
+        return (status != null ? status : HttpStatus.resolve(Integer.parseInt(this.response.status().toString())));
     }
 
     @Override
     public Integer getRawStatusCode() {
         Integer status = super.getRawStatusCode();
-        return (status != null ? status : this.response.status().code());
+        return (status != null ? status : Integer.parseInt(this.response.status().toString()));
     }
 
     @Override

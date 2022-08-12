@@ -17,7 +17,6 @@
 package xyz.nyist.adapter;
 
 import io.netty.channel.Channel;
-import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.cookie.Cookie;
 import io.netty.handler.ssl.SslHandler;
 import org.apache.commons.logging.Log;
@@ -36,6 +35,7 @@ import org.springframework.util.MultiValueMap;
 import reactor.core.publisher.Flux;
 import reactor.netty.Connection;
 import reactor.netty.http.server.HttpServerRequest;
+import xyz.nyist.core.Http3Headers;
 import xyz.nyist.http.Http3ServerRequest;
 
 import javax.net.ssl.SSLSession;
@@ -71,24 +71,22 @@ class ReactorServerHttp3Request extends AbstractServerHttpRequest {
     private String logPrefix;
 
 
-    public ReactorServerHttp3Request(Http3ServerRequest request, NettyDataBufferFactory bufferFactory)
-            throws URISyntaxException {
-
-        super(initUri(request), "", new Netty3HeadersAdapter(request.requestHeaders()));
+    public ReactorServerHttp3Request(Http3ServerRequest request, NettyDataBufferFactory bufferFactory) throws URISyntaxException {
+        super(initUri(request, request.uri()), "", new Netty3HeadersAdapter(request.requestHeaders(), true));
         Assert.notNull(bufferFactory, "DataBufferFactory must not be null");
         this.request = request;
         this.bufferFactory = bufferFactory;
     }
 
-    private static URI initUri(Http3ServerRequest request) throws URISyntaxException {
+    private static URI initUri(Http3ServerRequest request, String uri) throws URISyntaxException {
         Assert.notNull(request, "HttpServerRequest must not be null");
-        return new URI(resolveBaseUrl(request) + resolveRequestUri(request));
+        return new URI(resolveBaseUrl(request) + resolveRequestUri(uri));
     }
 
     private static URI resolveBaseUrl(Http3ServerRequest request) throws URISyntaxException {
-        String scheme = getScheme(request);
-        String header = request.requestHeaders().get(HttpHeaderNames.HOST);
-        if (header != null) {
+        String scheme = getScheme();
+        if (request.requestHeaders().contains(Http3Headers.PseudoHeaderName.AUTHORITY.value())) {
+            String header = request.requestHeaders().get(Http3Headers.PseudoHeaderName.AUTHORITY.value()).toString();
             final int portIndex;
             if (header.startsWith("[")) {
                 portIndex = header.indexOf(':', header.indexOf(']'));
@@ -113,12 +111,11 @@ class ReactorServerHttp3Request extends AbstractServerHttpRequest {
         }
     }
 
-    private static String getScheme(Http3ServerRequest request) {
-        return request.scheme();
+    private static String getScheme() {
+        return "https";
     }
 
-    private static String resolveRequestUri(Http3ServerRequest request) {
-        String uri = request.uri();
+    private static String resolveRequestUri(String uri) {
         for (int i = 0; i < uri.length(); i++) {
             char c = uri.charAt(i);
             if (c == '/' || c == '?' || c == '#') {
@@ -172,6 +169,7 @@ class ReactorServerHttp3Request extends AbstractServerHttpRequest {
     @Override
     @Nullable
     protected SslInfo initSslInfo() {
+        //todo
         Channel channel = ((Connection) this.request).channel();
         SslHandler sslHandler = channel.pipeline().get(SslHandler.class);
         if (sslHandler == null && channel.parent() != null) { // HTTP/2

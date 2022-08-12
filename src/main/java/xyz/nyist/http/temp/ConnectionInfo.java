@@ -17,8 +17,8 @@ package xyz.nyist.http.temp;
 
 import io.netty.channel.Channel;
 import io.netty.channel.socket.SocketChannel;
-import io.netty.handler.codec.http.HttpRequest;
 import reactor.util.annotation.Nullable;
+import xyz.nyist.core.Http3HeadersFrame;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -55,8 +55,8 @@ public final class ConnectionInfo {
     }
 
     @Nullable
-    public static ConnectionInfo from(Channel channel, HttpRequest request, boolean secured, SocketAddress remoteAddress,
-                                      @Nullable BiFunction<ConnectionInfo, HttpRequest, ConnectionInfo> forwardedHeaderHandler) {
+    public static ConnectionInfo from(Channel channel, Http3HeadersFrame request, boolean secured, SocketAddress remoteAddress,
+                                      @Nullable BiFunction<ConnectionInfo, Http3HeadersFrame, ConnectionInfo> forwardedHeaderHandler) {
         if (!(remoteAddress instanceof InetSocketAddress)) {
             return null;
         } else {

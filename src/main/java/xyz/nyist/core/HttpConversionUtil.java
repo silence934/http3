@@ -134,7 +134,9 @@ public final class HttpConversionUtil {
         return msg;
     }
 
-    private static CharSequence extractPath(CharSequence method, Http3Headers headers) {
+    public static CharSequence extractPath(Http3Headers headers) {
+        final CharSequence method = checkNotNull(headers.method(),
+                                                 "method header cannot be null in conversion to HTTP/1.x");
         if (HttpMethod.CONNECT.asciiName().contentEqualsIgnoreCase(method)) {
             // See https://tools.ietf.org/html/rfc7231#section-4.3.6
             return checkNotNull(headers.authority(),
@@ -164,7 +166,7 @@ public final class HttpConversionUtil {
         // HTTP/3 does not define a way to carry the version identifier that is included in the HTTP/1.1 request line.
         final CharSequence method = checkNotNull(http3Headers.method(),
                                                  "method header cannot be null in conversion to HTTP/1.x");
-        final CharSequence path = extractPath(method, http3Headers);
+        final CharSequence path = extractPath(http3Headers);
         FullHttpRequest msg = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.valueOf(method
                                                                                                           .toString()), path.toString(), content, validateHttpHeaders);
         try {
@@ -197,7 +199,7 @@ public final class HttpConversionUtil {
         // HTTP/3 does not define a way to carry the version identifier that is included in the HTTP/1.1 request line.
         final CharSequence method = checkNotNull(http3Headers.method(),
                                                  "method header cannot be null in conversion to HTTP/1.x");
-        final CharSequence path = extractPath(method, http3Headers);
+        final CharSequence path = extractPath(http3Headers);
         HttpRequest msg = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.valueOf(method.toString()),
                                                  path.toString(), validateHttpHeaders);
         try {

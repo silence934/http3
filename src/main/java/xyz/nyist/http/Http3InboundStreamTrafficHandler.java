@@ -18,13 +18,12 @@ package xyz.nyist.http;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.socket.ChannelInputShutdownReadComplete;
-import io.netty.handler.codec.http.HttpRequest;
+import lombok.extern.slf4j.Slf4j;
 import reactor.netty.Connection;
 import reactor.netty.ConnectionObserver;
 import reactor.netty.channel.ChannelOperations;
-import reactor.util.Logger;
-import reactor.util.Loggers;
 import xyz.nyist.core.Http3Exception;
+import xyz.nyist.core.Http3HeadersFrame;
 import xyz.nyist.http.server.Http3ServerOperations;
 import xyz.nyist.http.temp.ConnectionInfo;
 
@@ -37,11 +36,11 @@ import static reactor.netty.ReactorNetty.format;
 /**
  * @author Violeta Georgieva
  */
+@Slf4j
 public final class Http3InboundStreamTrafficHandler extends ChannelInboundHandlerAdapter {
 
-    static final Logger log = Loggers.getLogger(Http3InboundStreamTrafficHandler.class);
 
-    final BiFunction<ConnectionInfo, HttpRequest, ConnectionInfo> forwardedHeaderHandler;
+    final BiFunction<ConnectionInfo, Http3HeadersFrame, ConnectionInfo> forwardedHeaderHandler;
 
     ConnectionObserver listener;
 
@@ -75,9 +74,9 @@ public final class Http3InboundStreamTrafficHandler extends ChannelInboundHandle
 //                            .orElse(ctx.channel().remoteAddress());
         }
         // read message and track if it was keepAlive
-        if (msg instanceof HttpRequest) {
+        if (msg instanceof Http3HeadersFrame) {
 
-            final HttpRequest request = (HttpRequest) msg;
+            final Http3HeadersFrame request = (Http3HeadersFrame) msg;
 
             Connection conn = Connection.from(ctx.channel());
 

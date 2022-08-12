@@ -19,6 +19,7 @@ import io.netty.handler.codec.Headers;
 import io.netty.util.AsciiString;
 
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map.Entry;
 
 public interface Http3Headers extends Headers<CharSequence, CharSequence, Http3Headers> {
@@ -126,6 +127,8 @@ public interface Http3Headers extends Headers<CharSequence, CharSequence, Http3H
      * @return {@code true} if its contained, {@code false} otherwise.
      */
     boolean contains(CharSequence name, CharSequence value, boolean caseInsensitive);
+
+    List<Entry<CharSequence, CharSequence>> entries();
 
     /**
      * HTTP/2 (and HTTP/3) pseudo-headers names.

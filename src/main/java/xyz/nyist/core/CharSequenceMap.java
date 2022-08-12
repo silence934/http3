@@ -25,9 +25,9 @@ import static io.netty.util.AsciiString.CASE_SENSITIVE_HASHER;
 /**
  * Internal use only!
  */
-final class CharSequenceMap<V> extends DefaultHeaders<CharSequence, V, CharSequenceMap<V>> {
+public final class CharSequenceMap<V> extends DefaultHeaders<CharSequence, V, CharSequenceMap<V>> {
 
-    CharSequenceMap() {
+    public CharSequenceMap() {
         this(true);
     }
 

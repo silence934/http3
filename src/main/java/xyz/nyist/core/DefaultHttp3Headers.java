@@ -20,6 +20,11 @@ import io.netty.handler.codec.DefaultHeaders;
 import io.netty.util.AsciiString;
 import io.netty.util.ByteProcessor;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
 import static io.netty.util.AsciiString.*;
 import static xyz.nyist.core.Http3Headers.PseudoHeaderName.hasPseudoHeaderFormat;
 
@@ -189,6 +194,20 @@ public final class DefaultHttp3Headers
         return contains(name, value, caseInsensitive ? CASE_INSENSITIVE_HASHER : CASE_SENSITIVE_HASHER);
     }
 
+
+    @Override
+    public List<Map.Entry<CharSequence, CharSequence>> entries() {
+        if (isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Map.Entry<CharSequence, CharSequence>> entriesConverted = new ArrayList<>(size());
+        for (Map.Entry<CharSequence, CharSequence> entry : this) {
+            entriesConverted.add(entry);
+        }
+        return entriesConverted;
+    }
+
+
     @Override
     protected HeaderEntry<CharSequence, CharSequence> newHeaderEntry(int h, CharSequence name, CharSequence value,
                                                                      HeaderEntry<CharSequence, CharSequence> next) {
@@ -197,8 +216,8 @@ public final class DefaultHttp3Headers
 
     private final class Http3HeaderEntry extends HeaderEntry<CharSequence, CharSequence> {
 
-        protected Http3HeaderEntry(int hash, CharSequence key, CharSequence value,
-                                   HeaderEntry<CharSequence, CharSequence> next) {
+        private Http3HeaderEntry(int hash, CharSequence key, CharSequence value,
+                                 HeaderEntry<CharSequence, CharSequence> next) {
             super(hash, key);
             this.value = value;
             this.next = next;

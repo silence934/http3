@@ -20,6 +20,7 @@ import io.netty.handler.codec.http.HttpHeaders;
 import reactor.netty.Connection;
 import reactor.netty.NettyInbound;
 import reactor.util.annotation.Nullable;
+import xyz.nyist.core.Http3Headers;
 
 import java.net.InetSocketAddress;
 import java.util.function.Consumer;
@@ -56,7 +57,7 @@ public interface Http3ServerRequest extends NettyInbound, Http3StreamInfo {
      *
      * @return inbound {@link HttpHeaders}
      */
-    HttpHeaders requestHeaders();
+    Http3Headers requestHeaders();
 
     /**
      * Returns the current protocol scheme

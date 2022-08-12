@@ -92,7 +92,8 @@ public final class Http3FrameToHttpObjectCodec extends Http3RequestStreamInbound
         if (isLast) {
             ctx.fireChannelRead(new DefaultLastHttpContent(frame.content()));
         } else {
-            ctx.fireChannelRead(new DefaultHttpContent(frame.content()));
+            //ctx.fireChannelRead(new DefaultHttpContent(frame.content()));
+            ctx.fireChannelRead(frame);
         }
     }
 

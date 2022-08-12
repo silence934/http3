@@ -1,6 +1,5 @@
 package xyz.nyist.test;
 
-import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.DefaultChannelPromise;
@@ -56,9 +55,9 @@ public class Http3ServerTest {
                     return quicInbound.receiveObject().flatMap(s -> {
                         ChannelOperations operations = (ChannelOperations) quicInbound;
                         System.out.println("receive: " + s);
-                        HttpContent request = (HttpContent) s;
-                        ByteBuf content = request.content();
-                        System.out.println("content:" + content.toString(CharsetUtil.UTF_8));
+//                        HttpContent request = (HttpContent) s;
+//                        ByteBuf content = request.content();
+//                        System.out.println("content:" + content.toString(CharsetUtil.UTF_8));
 
                         StringBuilder sb = new StringBuilder();
                         for (int i = 0; i < 3; i++) {
@@ -100,7 +99,7 @@ public class Http3ServerTest {
                         });
                         //return a.thenEmpty(sendObject);
                         //return quicOutbound.sendObject(Unpooled.wrappedBuffer(sb.toString().getBytes(CharsetUtil.UTF_8)));
-                        return quicOutbound.sendObject(httpContent);
+                        return quicOutbound.send(Mono.just(Unpooled.wrappedBuffer(sb.toString().getBytes(CharsetUtil.UTF_8))));
                     });
                 })
                 .bindAddress(() -> new InetSocketAddress("0.0.0.0", 443))

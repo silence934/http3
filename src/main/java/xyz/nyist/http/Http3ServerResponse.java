@@ -27,6 +27,7 @@ import reactor.netty.NettyOutbound;
 import reactor.netty.http.server.WebsocketServerSpec;
 import reactor.netty.http.websocket.WebsocketInbound;
 import reactor.netty.http.websocket.WebsocketOutbound;
+import xyz.nyist.core.Http3Headers;
 
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -38,8 +39,6 @@ import java.util.function.Consumer;
  */
 public interface Http3ServerResponse extends NettyOutbound, Http3StreamInfo {
 
-    Http3ServerResponse addCookie(Cookie cookie);
-
     /**
      * Adds an outbound HTTP header, appending the value if the header already exist.
      *
@@ -48,6 +47,25 @@ public interface Http3ServerResponse extends NettyOutbound, Http3StreamInfo {
      * @return this {@link Http3ServerResponse}
      */
     Http3ServerResponse addHeader(CharSequence name, CharSequence value);
+
+    /**
+     * Sets an outbound HTTP header, replacing any pre-existing value.
+     *
+     * @param name  headers key
+     * @param value header value
+     * @return this {@link Http3ServerResponse}
+     */
+    Http3ServerResponse header(CharSequence name, CharSequence value);
+
+    /**
+     * Sets outbound HTTP headers, replacing any pre-existing value for these headers.
+     *
+     * @param headers netty headers map
+     * @return this {@link Http3ServerResponse}
+     */
+    Http3ServerResponse headers(Http3Headers headers);
+
+    Http3ServerResponse addCookie(Cookie cookie);
 
 
     @Override
@@ -68,36 +86,13 @@ public interface Http3ServerResponse extends NettyOutbound, Http3StreamInfo {
      */
     boolean hasSentHeaders();
 
-    /**
-     * Sets an outbound HTTP header, replacing any pre-existing value.
-     *
-     * @param name  headers key
-     * @param value header value
-     * @return this {@link Http3ServerResponse}
-     */
-    Http3ServerResponse header(CharSequence name, CharSequence value);
-
-    /**
-     * Sets outbound HTTP headers, replacing any pre-existing value for these headers.
-     *
-     * @param headers netty headers map
-     * @return this {@link Http3ServerResponse}
-     */
-    Http3ServerResponse headers(HttpHeaders headers);
-
-    /**
-     * Sets the request {@code keepAlive} if true otherwise remove the existing connection keep alive header
-     *
-     * @return this {@link Http3ServerResponse}
-     */
-    Http3ServerResponse keepAlive(boolean keepAlive);
 
     /**
      * Returns the outbound HTTP headers, sent back to the clients
      *
      * @return headers sent back to the clients
      */
-    HttpHeaders responseHeaders();
+    Http3Headers responseHeaders();
 
     /**
      * Sends the HTTP headers and empty content thus delimiting a full empty body http response.
@@ -168,7 +163,7 @@ public interface Http3ServerResponse extends NettyOutbound, Http3StreamInfo {
      *
      * @return the assigned HTTP status
      */
-    HttpResponseStatus status();
+    CharSequence status();
 
     /**
      * Sets an HTTP status to be sent along with the headers

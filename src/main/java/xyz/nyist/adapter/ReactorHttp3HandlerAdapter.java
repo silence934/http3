@@ -9,6 +9,7 @@ import org.springframework.http.server.reactive.HttpHeadResponseDecorator;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.util.Assert;
 import reactor.core.publisher.Mono;
+import xyz.nyist.core.Http3Exception;
 import xyz.nyist.http.Http3ServerRequest;
 import xyz.nyist.http.Http3ServerResponse;
 
@@ -54,6 +55,8 @@ public class ReactorHttp3HandlerAdapter implements BiFunction<Http3ServerRequest
             }
             reactorResponse.status(HttpResponseStatus.BAD_REQUEST);
             return Mono.empty();
+        } catch (Http3Exception e) {
+            throw new RuntimeException(e);
         }
     }
 

@@ -33,7 +33,6 @@ import reactor.netty.channel.ChannelOperations;
 import reactor.netty.resources.LoopResources;
 import reactor.netty.transport.TransportConfig;
 import reactor.util.annotation.Nullable;
-import xyz.nyist.core.Http3FrameToHttpObjectCodec;
 import xyz.nyist.http.server.Http3ServerOperations;
 import xyz.nyist.quic.QuicInitialSettingsSpec;
 import xyz.nyist.quic.QuicResources;
@@ -403,7 +402,7 @@ public abstract class Http3TransportConfig<CONF extends TransportConfig> extends
                 ch.pipeline().addLast(loggingHandler);
             }
             if (inbound) {
-                ch.pipeline().addLast(new Http3FrameToHttpObjectCodec(true, false));
+                //ch.pipeline().addLast(new Http3FrameToHttpObjectCodec(true, false));
 //                        .addLast(new HttpObjectAggregator(512 * 1024));
                 //ChannelOperations.addReactiveBridge(ch, (conn, observer, msg) -> new Http3ServerOperations(conn, observer), streamListener);
                 ChannelOperations.addReactiveBridge(ch, ChannelOperations.OnSetup.empty(), streamListener);
