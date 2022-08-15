@@ -36,6 +36,7 @@ import reactor.core.publisher.Flux;
 import reactor.netty.Connection;
 import reactor.netty.http.server.HttpServerRequest;
 import xyz.nyist.core.Http3Headers;
+import xyz.nyist.core.Http3HeadersFrame;
 import xyz.nyist.http.Http3ServerRequest;
 
 import javax.net.ssl.SSLSession;
@@ -72,68 +73,42 @@ class ReactorServerHttp3Request extends AbstractServerHttpRequest {
 
 
     public ReactorServerHttp3Request(Http3ServerRequest request, NettyDataBufferFactory bufferFactory) throws URISyntaxException {
-        super(initUri(request, request.uri()), "", new Netty3HeadersAdapter(request.requestHeaders(), true));
+        super(initUri(request), "", new Netty3HeadersAdapter(request.requestHeaders(), true));
         Assert.notNull(bufferFactory, "DataBufferFactory must not be null");
         this.request = request;
         this.bufferFactory = bufferFactory;
     }
 
-    private static URI initUri(Http3ServerRequest request, String uri) throws URISyntaxException {
-        Assert.notNull(request, "HttpServerRequest must not be null");
-        return new URI(resolveBaseUrl(request) + resolveRequestUri(uri));
-    }
+    private static URI initUri(Http3ServerRequest request) throws URISyntaxException {
+        Http3HeadersFrame headersFrame = request.requestHeaders();
+        Http3Headers headers = headersFrame.headers();
+        CharSequence sequence = headers.authority();
+        String scheme = "https";
+        String path = headers.path().toString();
+        URI uri = URI.create(path);
 
-    private static URI resolveBaseUrl(Http3ServerRequest request) throws URISyntaxException {
-        String scheme = getScheme();
-        if (request.requestHeaders().contains(Http3Headers.PseudoHeaderName.AUTHORITY.value())) {
-            String header = request.requestHeaders().get(Http3Headers.PseudoHeaderName.AUTHORITY.value()).toString();
-            final int portIndex;
-            if (header.startsWith("[")) {
-                portIndex = header.indexOf(':', header.indexOf(']'));
-            } else {
-                portIndex = header.indexOf(':');
-            }
-            if (portIndex != -1) {
-                try {
-                    return new URI(scheme, null, header.substring(0, portIndex),
-                                   Integer.parseInt(header.substring(portIndex + 1)), null, null, null);
-                } catch (NumberFormatException ex) {
-                    throw new URISyntaxException(header, "Unable to parse port", portIndex);
-                }
-            } else {
-                return new URI(scheme, header, null, null);
-            }
-        } else {
+        final int portIndex;
+        if (sequence == null || sequence.length() == 0) {
             InetSocketAddress localAddress = request.hostAddress();
             Assert.state(localAddress != null, "No host address available");
-            return new URI(scheme, null, localAddress.getHostString(),
-                           localAddress.getPort(), null, null, null);
+            return new URI(scheme, null, localAddress.getHostString(), localAddress.getPort(), uri.getPath(), uri.getQuery(), uri.getFragment());
         }
-    }
-
-    private static String getScheme() {
-        return "https";
-    }
-
-    private static String resolveRequestUri(String uri) {
-        for (int i = 0; i < uri.length(); i++) {
-            char c = uri.charAt(i);
-            if (c == '/' || c == '?' || c == '#') {
-                break;
-            }
-            if (c == ':' && (i + 2 < uri.length())) {
-                if (uri.charAt(i + 1) == '/' && uri.charAt(i + 2) == '/') {
-                    for (int j = i + 3; j < uri.length(); j++) {
-                        c = uri.charAt(j);
-                        if (c == '/' || c == '?' || c == '#') {
-                            return uri.substring(j);
-                        }
-                    }
-                    return "";
-                }
-            }
+        String authority = sequence.toString();
+        if (authority.startsWith("[")) {
+            // 应该是ip v6地址
+            portIndex = authority.indexOf(':', authority.indexOf(']'));
+        } else {
+            portIndex = authority.indexOf(':');
         }
-        return uri;
+        if (portIndex != -1) {
+            try {
+                return new URI(scheme, null, authority.substring(0, portIndex), Integer.parseInt(authority.substring(portIndex + 1)), uri.getPath(), uri.getQuery(), uri.getFragment());
+            } catch (NumberFormatException ex) {
+                throw new URISyntaxException(authority, "Unable to parse port", portIndex);
+            }
+        } else {
+            return new URI(scheme, authority, uri.getPath(), uri.getQuery(), uri.getFragment());
+        }
     }
 
 

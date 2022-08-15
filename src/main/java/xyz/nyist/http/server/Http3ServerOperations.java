@@ -387,9 +387,9 @@ public class Http3ServerOperations extends Http3Operations<Http3ServerRequest, H
     }
 
     @Override
-    public Http3Headers requestHeaders() {
+    public Http3HeadersFrame requestHeaders() {
         if (requestHeadersFrame != null) {
-            return requestHeadersFrame.headers();
+            return requestHeadersFrame;
         }
         throw new IllegalStateException("request not parsed");
     }
@@ -399,10 +399,10 @@ public class Http3ServerOperations extends Http3Operations<Http3ServerRequest, H
         return "https";
     }
 
-    @Override
-    public Http3Headers responseHeaders() {
-        return responseHeaders;
-    }
+//    @Override
+//    public Http3Headers responseHeaders() {
+//        return responseHeaders;
+//    }
 
     @Override
     public Mono<Void> send() {
@@ -662,7 +662,7 @@ public class Http3ServerOperations extends Http3Operations<Http3ServerRequest, H
     }
 
     @Override
-    protected Http3HeadersFrame outboundHttpMessage() {
+    public Http3HeadersFrame outboundHttpMessage() {
         return responseHeadsFrame;
     }
 
@@ -700,7 +700,7 @@ public class Http3ServerOperations extends Http3Operations<Http3ServerRequest, H
         }
 
         @Override
-        protected Http3HeadersFrame outboundHttpMessage() {
+        public Http3HeadersFrame outboundHttpMessage() {
             // return customResponse;
             return null;
         }

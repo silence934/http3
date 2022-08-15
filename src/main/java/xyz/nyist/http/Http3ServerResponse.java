@@ -28,6 +28,7 @@ import reactor.netty.http.server.WebsocketServerSpec;
 import reactor.netty.http.websocket.WebsocketInbound;
 import reactor.netty.http.websocket.WebsocketOutbound;
 import xyz.nyist.core.Http3Headers;
+import xyz.nyist.core.Http3HeadersFrame;
 
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -92,7 +93,7 @@ public interface Http3ServerResponse extends NettyOutbound, Http3StreamInfo {
      *
      * @return headers sent back to the clients
      */
-    Http3Headers responseHeaders();
+    Http3HeadersFrame outboundHttpMessage();
 
     /**
      * Sends the HTTP headers and empty content thus delimiting a full empty body http response.

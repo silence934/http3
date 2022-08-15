@@ -58,7 +58,7 @@ public class ReactorServerHttp3Response extends AbstractServerHttpResponse imple
 
 
     public ReactorServerHttp3Response(Http3ServerResponse response, DataBufferFactory bufferFactory) throws Http3Exception {
-        super(bufferFactory, new HttpHeaders(new Netty3HeadersAdapter(response.responseHeaders(), false)));
+        super(bufferFactory, new HttpHeaders(new Netty3HeadersAdapter(response.outboundHttpMessage(), false)));
         Assert.notNull(response, "HttpServerResponse must not be null");
         this.response = response;
     }

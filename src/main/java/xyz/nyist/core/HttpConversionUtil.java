@@ -194,21 +194,18 @@ public final class HttpConversionUtil {
      * @return A new request object which represents headers for a chunked request
      * @throws Http3Exception
      */
-    public static HttpRequest toHttpRequest(long streamId, Http3Headers http3Headers, boolean validateHttpHeaders)
-            throws Http3Exception {
+    public static HttpRequest toHttpRequest(long streamId, Http3Headers http3Headers, boolean validateHttpHeaders) throws Http3Exception {
         // HTTP/3 does not define a way to carry the version identifier that is included in the HTTP/1.1 request line.
         final CharSequence method = checkNotNull(http3Headers.method(),
                                                  "method header cannot be null in conversion to HTTP/1.x");
         final CharSequence path = extractPath(http3Headers);
-        HttpRequest msg = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.valueOf(method.toString()),
-                                                 path.toString(), validateHttpHeaders);
+        HttpRequest msg = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.valueOf(method.toString()), path.toString(), validateHttpHeaders);
         try {
             addHttp3ToHttpHeaders(streamId, http3Headers, msg.headers(), msg.protocolVersion(), false, true);
         } catch (Http3Exception e) {
             throw e;
         } catch (Throwable t) {
-            throw streamError(streamId, Http3ErrorCode.H3_MESSAGE_ERROR,
-                              "HTTP/3 to HTTP/1.x headers conversion error", t);
+            throw streamError(streamId, Http3ErrorCode.H3_MESSAGE_ERROR, "HTTP/3 to HTTP/1.x headers conversion error", t);
         }
         return msg;
     }
@@ -225,9 +222,7 @@ public final class HttpConversionUtil {
      * @return A new response object which represents headers for a chunked response
      * @throws Http3Exception
      */
-    static HttpResponse toHttpResponse(final long streamId,
-                                       final Http3Headers http3Headers,
-                                       final boolean validateHttpHeaders) throws Http3Exception {
+    static HttpResponse toHttpResponse(final long streamId, final Http3Headers http3Headers, final boolean validateHttpHeaders) throws Http3Exception {
         final HttpResponseStatus status = parseStatus(streamId, http3Headers.status());
         // HTTP/3 does not define a way to carry the version or reason phrase that is included in an
         // HTTP/1.1 status line.
@@ -272,8 +267,7 @@ public final class HttpConversionUtil {
      *                      {@code false} for response message.
      * @throws Http3Exception If not all HTTP/3 headers can be translated to HTTP/1.x.
      */
-    static void addHttp3ToHttpHeaders(long streamId, Http3Headers inputHeaders, HttpHeaders outputHeaders,
-                                      HttpVersion httpVersion, boolean isTrailer, boolean isRequest) throws Http3Exception {
+    static void addHttp3ToHttpHeaders(long streamId, Http3Headers inputHeaders, HttpHeaders outputHeaders, HttpVersion httpVersion, boolean isTrailer, boolean isRequest) throws Http3Exception {
         Http3ToHttpHeaderTranslator translator = new Http3ToHttpHeaderTranslator(streamId, outputHeaders, isRequest);
         try {
             translator.translateHeaders(inputHeaders);
@@ -373,8 +367,7 @@ public final class HttpConversionUtil {
      * @param entry An entry whose name is {@link HttpHeaderNames#TE}.
      * @param out   the resulting HTTP/3 headers.
      */
-    private static void toHttp3HeadersFilterTE(Entry<CharSequence, CharSequence> entry,
-                                               Http3Headers out) {
+    private static void toHttp3HeadersFilterTE(Entry<CharSequence, CharSequence> entry, Http3Headers out) {
         if (indexOf(entry.getValue(), ',', 0) == -1) {
             if (contentEqualsIgnoreCase(trim(entry.getValue()), TRAILERS)) {
                 out.add(TE, TRAILERS);

@@ -130,6 +130,7 @@ public interface Http3Headers extends Headers<CharSequence, CharSequence, Http3H
 
     List<Entry<CharSequence, CharSequence>> entries();
 
+
     /**
      * HTTP/2 (and HTTP/3) pseudo-headers names.
      */
@@ -229,5 +230,6 @@ public interface Http3Headers extends Headers<CharSequence, CharSequence, Http3H
             return requestOnly;
         }
     }
+
 
 }
