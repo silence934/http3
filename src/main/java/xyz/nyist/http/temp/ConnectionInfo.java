@@ -16,12 +16,12 @@
 package xyz.nyist.http.temp;
 
 import io.netty.channel.Channel;
-import io.netty.channel.socket.SocketChannel;
+import io.netty.incubator.codec.quic.QuicStreamChannel;
 import reactor.util.annotation.Nullable;
 import xyz.nyist.core.Http3HeadersFrame;
+import xyz.nyist.http.ConnectionChangeHandler;
 
 import java.net.InetSocketAddress;
-import java.net.SocketAddress;
 import java.util.function.BiFunction;
 
 import static java.util.Objects.requireNonNull;
@@ -55,12 +55,12 @@ public final class ConnectionInfo {
     }
 
     @Nullable
-    public static ConnectionInfo from(Channel channel, Http3HeadersFrame request, boolean secured, SocketAddress remoteAddress,
+    public static ConnectionInfo from(Channel channel, Http3HeadersFrame request,
                                       @Nullable BiFunction<ConnectionInfo, Http3HeadersFrame, ConnectionInfo> forwardedHeaderHandler) {
-        if (!(remoteAddress instanceof InetSocketAddress)) {
+        if (!(channel instanceof QuicStreamChannel)) {
             return null;
         } else {
-            ConnectionInfo connectionInfo = ConnectionInfo.newConnectionInfo(channel, secured, (InetSocketAddress) remoteAddress);
+            ConnectionInfo connectionInfo = ConnectionInfo.newConnectionInfo(channel);
             if (forwardedHeaderHandler != null) {
                 return forwardedHeaderHandler.apply(connectionInfo, request);
             }
@@ -71,15 +71,18 @@ public final class ConnectionInfo {
     /**
      * Retrieve the connection information from the current connection directly
      *
-     * @param c       the current channel
-     * @param secured is transport secure (SSL)
+     * @param c the current channel
      * @return the connection information
      */
-    static ConnectionInfo newConnectionInfo(Channel c, boolean secured, InetSocketAddress remoteAddress) {
-        SocketChannel channel = (SocketChannel) c;
-        InetSocketAddress hostAddress = channel.localAddress();
-        String scheme = secured ? "https" : "http";
-        return new ConnectionInfo(hostAddress, remoteAddress, scheme);
+    static ConnectionInfo newConnectionInfo(Channel c) {
+        Channel parent = c.parent().parent();
+        ConnectionChangeHandler handler = c.parent().pipeline().get(ConnectionChangeHandler.class);
+        InetSocketAddress remoteAddress = null;
+        if (handler != null) {
+            remoteAddress = (InetSocketAddress) handler.getConnection().newAddress();
+        }
+
+        return new ConnectionInfo((InetSocketAddress) parent.localAddress(), remoteAddress, "https");
     }
 
     /**

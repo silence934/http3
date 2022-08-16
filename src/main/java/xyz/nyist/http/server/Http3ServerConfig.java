@@ -32,10 +32,7 @@ import reactor.netty.channel.MicrometerChannelMetricsRecorder;
 import reactor.netty.transport.logging.AdvancedByteBufFormat;
 import reactor.util.annotation.Nullable;
 import xyz.nyist.core.Http3ServerConnectionHandler;
-import xyz.nyist.http.Http3ServerRequest;
-import xyz.nyist.http.Http3ServerResponse;
-import xyz.nyist.http.Http3TransportConfig;
-import xyz.nyist.http.QuicOperations;
+import xyz.nyist.http.*;
 import xyz.nyist.quic.QuicConnection;
 import xyz.nyist.quic.QuicInitialSettingsSpec;
 import xyz.nyist.quic.QuicServer;
@@ -391,7 +388,8 @@ public final class Http3ServerConfig extends Http3TransportConfig<Http3ServerCon
 
             pipeline.remove(NettyPipeline.ReactiveBridge);
 
-            pipeline.addLast(new Http3ServerConnectionHandler(
+            pipeline.addLast(new ConnectionChangeHandler())
+                    .addLast(new Http3ServerConnectionHandler(
                             streamChannelInitializer(loggingHandler, streamObserver, true)
                     ))
                     .addLast(NettyPipeline.ReactiveBridge,

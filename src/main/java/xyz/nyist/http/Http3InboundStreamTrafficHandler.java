@@ -85,8 +85,6 @@ public final class Http3InboundStreamTrafficHandler extends ChannelInboundHandle
                                                                   null,
                                                                   ConnectionInfo.from(ctx.channel(),
                                                                                       request,
-                                                                                      true,
-                                                                                      remoteAddress,
                                                                                       forwardedHeaderHandler),
                                                                   Http3ServerFormDecoderProvider.DEFAULT_FORM_DECODER_SPEC,
                                                                   null,
@@ -115,6 +113,13 @@ public final class Http3InboundStreamTrafficHandler extends ChannelInboundHandle
             }
         }
         ctx.fireUserEventTriggered(evt);
+    }
+
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        log.error(cause.toString());
+        super.exceptionCaught(ctx, cause);
     }
 
 }
