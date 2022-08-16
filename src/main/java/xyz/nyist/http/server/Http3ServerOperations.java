@@ -249,7 +249,6 @@ public class Http3ServerOperations extends Http3Operations<Http3ServerRequest, H
         // the response. In that case body will be EMPTY_BUFFER and if we set Content-Length: 0,
         // this will not be correct
         // https://github.com/reactor/reactor-netty/issues/1333
-
         if (!HttpMethod.HEAD.equals(method())) {
             responseHeadsFrame.headers().remove(HttpHeaderNames.TRANSFER_ENCODING);
             if (!HttpResponseStatus.NOT_MODIFIED.codeAsText().equals(status())) {
@@ -266,8 +265,8 @@ public class Http3ServerOperations extends Http3Operations<Http3ServerRequest, H
         if (body == null || body == EMPTY_BUFFER) {
             return writeHeads;
         }
-        //todo 需要聚合
-        return channel().writeAndFlush(new DefaultHttp3DataFrame(body));
+        ChannelFuture writeBody = channel().writeAndFlush(new DefaultHttp3DataFrame(body));
+        return CombinationChannelFuture.create(writeHeads, writeBody);
     }
 
 

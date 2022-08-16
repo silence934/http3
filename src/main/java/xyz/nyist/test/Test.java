@@ -1,10 +1,9 @@
 package xyz.nyist.test;
 
-import io.netty.handler.codec.http.HttpHeaders;
-import xyz.nyist.core.DefaultHttp3Headers;
+import reactor.core.publisher.Mono;
 import xyz.nyist.core.Http3Exception;
-import xyz.nyist.core.Http3Headers;
-import xyz.nyist.core.Http3Util;
+
+import java.util.function.Consumer;
 
 /**
  * @author: fucong
@@ -14,9 +13,12 @@ import xyz.nyist.core.Http3Util;
 public class Test {
 
     public static void main(String[] args) throws Http3Exception {
-        Http3Headers headers = new DefaultHttp3Headers();
-        HttpHeaders entries = Http3Util.addHttp3ToHttpHeaders(1, headers);
-        System.out.println(entries);
+        Mono.just("123").subscribe(new Consumer<String>() {
+            @Override
+            public void accept(String s) {
+                System.out.println(s);
+            }
+        });
     }
 
 }

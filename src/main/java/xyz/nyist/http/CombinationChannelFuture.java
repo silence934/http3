@@ -2,133 +2,82 @@ package xyz.nyist.http;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
-import io.netty.util.concurrent.Future;
-import io.netty.util.concurrent.GenericFutureListener;
-
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.DefaultChannelPromise;
 
 /**
  * @author: fucong
  * @Date: 2022/8/12 14:42
  * @Description:
  */
-public class CombinationChannelFuture implements ChannelFuture {
+public class CombinationChannelFuture extends DefaultChannelPromise {
 
-    @Override
-    public Channel channel() {
+
+    private CombinationChannelFuture(Channel channel) {
+        super(channel);
+    }
+
+    public static CombinationChannelFuture create(ChannelFuture future1, ChannelFuture future2) {
+        if (future1.channel() == future2.channel()) {
+            return new SingleThreadCombinationChannelFuture(future1, future2);
+        }
+        //todo 两个future不是一个channel
         return null;
     }
 
-    @Override
-    public boolean isSuccess() {
-        return false;
-    }
 
-    @Override
-    public boolean isCancellable() {
-        return false;
-    }
+    private static class SingleThreadCombinationChannelFuture extends CombinationChannelFuture {
 
-    @Override
-    public Throwable cause() {
-        return null;
-    }
+        private final ChannelFuture future1;
 
-    @Override
-    public ChannelFuture addListener(GenericFutureListener<? extends Future<? super Void>> listener) {
-        return null;
-    }
+        private final ChannelFuture future2;
 
-    @Override
-    public ChannelFuture addListeners(GenericFutureListener<? extends Future<? super Void>>... listeners) {
-        return null;
-    }
+        private SingleThreadCombinationChannelFuture(ChannelFuture future1, ChannelFuture future2) {
+            super(future1.channel());
+            this.future1 = future1;
+            this.future2 = future2;
 
-    @Override
-    public ChannelFuture removeListener(GenericFutureListener<? extends Future<? super Void>> listener) {
-        return null;
-    }
 
-    @Override
-    public ChannelFuture removeListeners(GenericFutureListener<? extends Future<? super Void>>... listeners) {
-        return null;
-    }
+            future1.addListener((ChannelFutureListener) this::operationComplete);
+            future2.addListener((ChannelFutureListener) this::operationComplete);
+        }
 
-    @Override
-    public ChannelFuture sync() throws InterruptedException {
-        return null;
-    }
 
-    @Override
-    public ChannelFuture syncUninterruptibly() {
-        return null;
-    }
+        public void operationComplete(ChannelFuture future) {
+            if (this.isDone()) {
+                return;
+            }
+            if (future1.isSuccess() && future2.isSuccess()) {
+                this.setSuccess();
+            }
 
-    @Override
-    public ChannelFuture await() throws InterruptedException {
-        return null;
-    }
+            if (future1.isDone()) {
+                if (future1.isCancelled()) {
+                    if (!future2.isDone() && future2.isCancellable()) {
+                        future2.cancel(true);
+                    }
+                    this.cancel(true);
+                } else if (!future1.isSuccess()) {
+                    if (!future2.isDone() && future2.isCancellable()) {
+                        future2.cancel(true);
+                    }
+                    this.setFailure(future1.cause());
+                }
+            } else if (future2.isDone()) {
+                if (future2.isCancelled()) {
+                    if (!future1.isDone() && future1.isCancellable()) {
+                        future1.cancel(true);
+                    }
+                    this.cancel(true);
+                } else if (!future2.isSuccess()) {
+                    if (!future1.isDone() && future1.isCancellable()) {
+                        future1.cancel(true);
+                    }
+                    this.setFailure(future2.cause());
+                }
+            }
+        }
 
-    @Override
-    public ChannelFuture awaitUninterruptibly() {
-        return null;
-    }
-
-    @Override
-    public boolean await(long timeout, TimeUnit unit) throws InterruptedException {
-        return false;
-    }
-
-    @Override
-    public boolean await(long timeoutMillis) throws InterruptedException {
-        return false;
-    }
-
-    @Override
-    public boolean awaitUninterruptibly(long timeout, TimeUnit unit) {
-        return false;
-    }
-
-    @Override
-    public boolean awaitUninterruptibly(long timeoutMillis) {
-        return false;
-    }
-
-    @Override
-    public Void getNow() {
-        return null;
-    }
-
-    @Override
-    public boolean cancel(boolean mayInterruptIfRunning) {
-        return false;
-    }
-
-    @Override
-    public boolean isCancelled() {
-        return false;
-    }
-
-    @Override
-    public boolean isDone() {
-        return false;
-    }
-
-    @Override
-    public Void get() throws InterruptedException, ExecutionException {
-        return null;
-    }
-
-    @Override
-    public Void get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
-        return null;
-    }
-
-    @Override
-    public boolean isVoid() {
-        return false;
     }
 
 }
