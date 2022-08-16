@@ -21,7 +21,7 @@ public class CombinationChannelFuture extends DefaultChannelPromise {
         if (future1.channel() == future2.channel()) {
             return new SingleThreadCombinationChannelFuture(future1, future2);
         }
-        //todo 两个future不是一个channel
+        //todo 两个future不是一个channel 需要考虑线程安全问题
         return null;
     }
 
