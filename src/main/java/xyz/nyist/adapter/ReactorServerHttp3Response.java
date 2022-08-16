@@ -31,6 +31,7 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.http.ZeroCopyHttpOutputMessage;
 import org.springframework.http.server.reactive.AbstractServerHttpResponse;
 import org.springframework.http.server.reactive.ServerHttpResponse;
+import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -53,14 +54,32 @@ public class ReactorServerHttp3Response extends AbstractServerHttpResponse imple
 
     private static final Log logger = LogFactory.getLog(ReactorServerHttp3Response.class);
 
-
     private final Http3ServerResponse response;
+
+    private final HttpHeaders headers;
+
+    @Nullable
+    private HttpHeaders readOnlyHeaders;
 
 
     public ReactorServerHttp3Response(Http3ServerResponse response, DataBufferFactory bufferFactory) throws Http3Exception {
-        super(bufferFactory, new HttpHeaders(new Netty3HeadersAdapter(response.outboundHttpMessage(), false)));
+        super(bufferFactory, HttpHeaders.EMPTY);
         Assert.notNull(response, "HttpServerResponse must not be null");
         this.response = response;
+        this.headers = new Http3HeadersAdapter(new Netty3HeadersAdapter(response.outboundHttpMessage(), false));
+    }
+
+
+    @Override
+    public HttpHeaders getHeaders() {
+        if (this.readOnlyHeaders != null) {
+            return this.readOnlyHeaders;
+        } else if (super.getHeaders().getClass().getName().contains("ReadOnlyHttpHeaders")) {
+            this.readOnlyHeaders = Http3HeadersAdapter.readOnlyHttpHeaders(this.headers);
+            return this.readOnlyHeaders;
+        } else {
+            return this.headers;
+        }
     }
 
 
@@ -110,7 +129,7 @@ public class ReactorServerHttp3Response extends AbstractServerHttpResponse imple
         // https://github.com/netty/netty/issues/8161
         for (List<ResponseCookie> cookies : getCookies().values()) {
             for (ResponseCookie cookie : cookies) {
-                this.response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+                this.response.addHeader(Http3HeadersAdapter.SET_COOKIE, cookie.toString());
             }
         }
     }

@@ -80,7 +80,6 @@ public abstract class Http3Operations<INBOUND extends NettyInbound, OUTBOUND ext
             }
     );
 
-    volatile int finSent;
 
     volatile int statusAndHeadersSent;
 

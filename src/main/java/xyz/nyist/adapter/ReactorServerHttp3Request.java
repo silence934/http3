@@ -23,6 +23,7 @@ import org.apache.commons.logging.Log;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.NettyDataBufferFactory;
 import org.springframework.http.HttpCookie;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpLogging;
 import org.springframework.http.server.reactive.AbstractServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpRequest;
@@ -69,14 +70,18 @@ class ReactorServerHttp3Request extends AbstractServerHttpRequest {
 
     private final NettyDataBufferFactory bufferFactory;
 
+    private final HttpHeaders headers;
+
+
     private String logPrefix;
 
 
     public ReactorServerHttp3Request(Http3ServerRequest request, NettyDataBufferFactory bufferFactory) throws URISyntaxException {
-        super(initUri(request), "", new Netty3HeadersAdapter(request.requestHeaders(), true));
+        super(initUri(request), "", HttpHeaders.EMPTY);
         Assert.notNull(bufferFactory, "DataBufferFactory must not be null");
         this.request = request;
         this.bufferFactory = bufferFactory;
+        this.headers = Http3HeadersAdapter.readOnlyHttpHeaders(new Netty3HeadersAdapter(request.requestHeaders(), true));
     }
 
     private static URI initUri(Http3ServerRequest request) throws URISyntaxException {
@@ -155,6 +160,12 @@ class ReactorServerHttp3Request extends AbstractServerHttpRequest {
             //return new DefaultSslInfo(session);
         }
         return null;
+    }
+
+
+    @Override
+    public HttpHeaders getHeaders() {
+        return this.headers;
     }
 
     @Override
