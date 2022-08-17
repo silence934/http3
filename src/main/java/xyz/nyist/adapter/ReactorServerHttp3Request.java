@@ -18,7 +18,8 @@ package xyz.nyist.adapter;
 
 import io.netty.channel.Channel;
 import io.netty.handler.codec.http.cookie.Cookie;
-import io.netty.handler.ssl.SslHandler;
+import io.netty.incubator.codec.quic.QuicChannel;
+import io.netty.incubator.codec.quic.QuicStreamChannel;
 import org.apache.commons.logging.Log;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.NettyDataBufferFactory;
@@ -39,7 +40,7 @@ import xyz.nyist.core.Http3Headers;
 import xyz.nyist.core.Http3HeadersFrame;
 import xyz.nyist.http.Http3ServerRequest;
 
-import javax.net.ssl.SSLSession;
+import javax.net.ssl.SSLEngine;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -144,15 +145,14 @@ class ReactorServerHttp3Request extends AbstractServerHttpRequest {
     @Override
     @Nullable
     protected SslInfo initSslInfo() {
-        //todo
         Channel channel = ((Connection) this.request).channel();
-        SslHandler sslHandler = channel.pipeline().get(SslHandler.class);
-        if (sslHandler == null && channel.parent() != null) { // HTTP/2
-            sslHandler = channel.parent().pipeline().get(SslHandler.class);
-        }
-        if (sslHandler != null) {
-            SSLSession session = sslHandler.engine().getSession();
-            //return new DefaultSslInfo(session);
+        if (channel instanceof QuicStreamChannel) {
+            QuicChannel quicChannel = (QuicChannel) channel.parent();
+            SSLEngine sslEngine = quicChannel.sslEngine();
+
+            if (sslEngine != null) {
+                return new DefaultSslInfo(sslEngine.getSession());
+            }
         }
         return null;
     }
