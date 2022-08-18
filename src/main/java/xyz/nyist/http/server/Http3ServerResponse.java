@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package xyz.nyist.http;
+package xyz.nyist.http.server;
 
 import io.netty.channel.Channel;
 import io.netty.handler.codec.http.HttpHeaderNames;
@@ -38,7 +38,7 @@ import java.util.function.Consumer;
  *
  * @author silenct
  */
-public interface Http3ServerResponse extends NettyOutbound, Http3StreamInfo {
+public interface Http3ServerResponse extends NettyOutbound, Http3ServerInfos {
 
     /**
      * Adds an outbound HTTP header, appending the value if the header already exist.

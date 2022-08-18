@@ -32,9 +32,10 @@ import reactor.util.Logger;
 import reactor.util.Loggers;
 import reactor.util.annotation.Nullable;
 import reactor.util.context.Context;
+import xyz.nyist.http.client.Http3ClientOperations;
+import xyz.nyist.http.client.Http3ClientRequest;
+import xyz.nyist.http.client.Http3ClientResponse;
 import xyz.nyist.quic.QuicConnection;
-import xyz.nyist.quic.QuicInbound;
-import xyz.nyist.quic.QuicOutbound;
 
 import java.io.IOException;
 import java.util.Map;
@@ -101,11 +102,9 @@ public final class QuicOperations implements ChannelOperationsId, QuicConnection
     public String asLongText() {
         String channelStr = channel().toString();
         int ind = channelStr.indexOf(ORIGINAL_CHANNEL_ID_PREFIX);
-        return new StringBuilder(1 + (channelStr.length() - ORIGINAL_CHANNEL_ID_PREFIX_LENGTH))
-                .append(channelStr.substring(0, ind))
-                .append(CHANNEL_ID_PREFIX)
-                .append(channelStr.substring(ind + ORIGINAL_CHANNEL_ID_PREFIX_LENGTH))
-                .toString();
+        return channelStr.substring(0, ind) +
+                CHANNEL_ID_PREFIX +
+                channelStr.substring(ind + ORIGINAL_CHANNEL_ID_PREFIX_LENGTH);
     }
 
     @Override
@@ -121,15 +120,15 @@ public final class QuicOperations implements ChannelOperationsId, QuicConnection
     @Override
     public Mono<Void> createStream(
             QuicStreamType streamType,
-            BiFunction<? super QuicInbound, ? super QuicOutbound, ? extends Publisher<Void>> streamHandler) {
+            BiFunction<? super Http3ClientRequest, ? super Http3ClientResponse, ? extends Publisher<Void>> streamHandler) {
         Objects.requireNonNull(streamType, "streamType");
         Objects.requireNonNull(streamHandler, "streamHandler");
 
         return Mono.create(sink -> {
             QuicStreamChannelBootstrap bootstrap = quicChannel.newStreamBootstrap();
-//            bootstrap.type(streamType)
-//                    .handler(QuicTransportConfig.streamChannelInitializer(loggingHandler,
-//                                                                          streamListener.then(new QuicStreamChannelObserver(sink, streamHandler)), false));
+            bootstrap.type(streamType)
+                    .handler(Http3TransportConfig.streamChannelInitializer(loggingHandler,
+                                                                           streamListener.then(new QuicStreamChannelObserver(sink, streamHandler)), false));
 
             setAttributes(bootstrap, streamAttrs);
             setChannelOptions(bootstrap, streamOptions);
@@ -154,11 +153,11 @@ public final class QuicOperations implements ChannelOperationsId, QuicConnection
 
         final MonoSink<Void> sink;
 
-        final BiFunction<? super QuicInbound, ? super QuicOutbound, ? extends Publisher<Void>> streamHandler;
+        final BiFunction<? super Http3ClientRequest, ? super Http3ClientResponse, ? extends Publisher<Void>> streamHandler;
 
         QuicStreamChannelObserver(
                 MonoSink<Void> sink,
-                BiFunction<? super QuicInbound, ? super QuicOutbound, ? extends Publisher<Void>> streamHandler) {
+                BiFunction<? super Http3ClientRequest, ? super Http3ClientResponse, ? extends Publisher<Void>> streamHandler) {
             this.currentContext = Context.of(sink.contextView());
             this.sink = sink;
             this.streamHandler = streamHandler;
@@ -173,23 +172,20 @@ public final class QuicOperations implements ChannelOperationsId, QuicConnection
         @SuppressWarnings("FutureReturnValueIgnored")
         public void onStateChange(Connection connection, State newState) {
             if (newState == CONFIGURED) {
-                sink.success();
-
                 try {
                     if (log.isDebugEnabled()) {
                         log.debug(format(connection.channel(), "Handler is being applied: {}"), streamHandler);
                     }
-
-//                    QuicStreamOperations ops = (QuicStreamOperations) connection;
-//                    Mono.fromDirect(streamHandler.apply(ops, ops))
-//                            .subscribe(ops.disposeSubscriber());
+                    Http3ClientOperations ops = (Http3ClientOperations) connection;
+                    Mono.fromDirect(streamHandler.apply(ops, ops))
+                            .subscribe(ops.disposeSubscriber());
                 } catch (Throwable t) {
                     log.error(format(connection.channel(), ""), t);
 
                     //"FutureReturnValueIgnored" this is deliberate
-                    connection.channel()
-                            .close();
+                    connection.channel().close();
                 }
+                sink.success();
             }
         }
 

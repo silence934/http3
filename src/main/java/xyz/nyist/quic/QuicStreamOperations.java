@@ -44,7 +44,7 @@ import static reactor.netty.ReactorNetty.format;
  *
  * @author Violeta Georgieva
  */
-class QuicStreamOperations extends ChannelOperations<QuicInbound, QuicOutbound> implements QuicInbound, QuicOutbound {
+public class QuicStreamOperations extends ChannelOperations<QuicInbound, QuicOutbound> implements QuicInbound, QuicOutbound {
 
     static final AtomicIntegerFieldUpdater<QuicStreamOperations> FIN_SENT =
             AtomicIntegerFieldUpdater.newUpdater(QuicStreamOperations.class, "finSent");

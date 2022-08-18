@@ -19,6 +19,8 @@ import io.netty.incubator.codec.quic.QuicStreamType;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
 import reactor.netty.Connection;
+import xyz.nyist.http.client.Http3ClientRequest;
+import xyz.nyist.http.client.Http3ClientResponse;
 
 import java.util.function.BiFunction;
 
@@ -38,7 +40,7 @@ public interface QuicConnection extends Connection {
      * @return a {@link Mono} completing when the stream is created, otherwise fails
      */
     default Mono<Void> createStream(
-            BiFunction<? super QuicInbound, ? super QuicOutbound, ? extends Publisher<Void>> streamHandler) {
+            BiFunction<? super Http3ClientRequest, ? super Http3ClientResponse, ? extends Publisher<Void>> streamHandler) {
         return createStream(QuicStreamType.BIDIRECTIONAL, streamHandler);
     }
 
@@ -53,6 +55,6 @@ public interface QuicConnection extends Connection {
      */
     Mono<Void> createStream(
             QuicStreamType streamType,
-            BiFunction<? super QuicInbound, ? super QuicOutbound, ? extends Publisher<Void>> streamHandler);
+            BiFunction<? super Http3ClientRequest, ? super Http3ClientResponse, ? extends Publisher<Void>> streamHandler);
 
 }

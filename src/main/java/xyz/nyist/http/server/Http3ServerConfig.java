@@ -15,15 +15,16 @@
  */
 package xyz.nyist.http.server;
 
-import io.netty.channel.*;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelOption;
 import io.netty.channel.group.ChannelGroup;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.incubator.codec.quic.*;
 import io.netty.util.AttributeKey;
 import lombok.extern.slf4j.Slf4j;
-import org.reactivestreams.Publisher;
-import reactor.netty.ChannelPipelineConfigurer;
 import reactor.netty.Connection;
 import reactor.netty.ConnectionObserver;
 import reactor.netty.NettyPipeline;
@@ -32,7 +33,7 @@ import reactor.netty.channel.MicrometerChannelMetricsRecorder;
 import reactor.netty.transport.logging.AdvancedByteBufFormat;
 import reactor.util.annotation.Nullable;
 import xyz.nyist.core.Http3ServerConnectionHandler;
-import xyz.nyist.http.*;
+import xyz.nyist.http.Http3TransportConfig;
 import xyz.nyist.quic.QuicConnection;
 import xyz.nyist.quic.QuicInitialSettingsSpec;
 import xyz.nyist.quic.QuicServer;
@@ -42,12 +43,10 @@ import java.nio.charset.Charset;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import static reactor.netty.ConnectionObserver.State.CONFIGURED;
 import static reactor.netty.ConnectionObserver.State.CONNECTED;
 import static reactor.netty.ReactorNetty.format;
 
@@ -148,11 +147,6 @@ public final class Http3ServerConfig extends Http3TransportConfig<Http3ServerCon
 
 
     @Override
-    protected ChannelPipelineConfigurer defaultOnChannelInit() {
-        return new QuicChannelInitializer(this);
-    }
-
-    @Override
     protected ChannelInitializer<Channel> parentChannelInitializer() {
         return new ParentChannelInitializer(this);
     }
@@ -232,7 +226,7 @@ public final class Http3ServerConfig extends Http3TransportConfig<Http3ServerCon
             this.maxRecvUdpPayloadSize = config.maxRecvUdpPayloadSize;
             this.maxSendUdpPayloadSize = config.maxSendUdpPayloadSize;
             this.options = config.options();
-            ConnectionObserver observer = config.defaultConnectionObserver().then(config.connectionObserver());
+            ConnectionObserver observer = new QuicChannelObserver(config, config.defaultConnectionObserver().then(config.connectionObserver()));
             this.quicChannelInitializer = config.channelInitializer(observer, null, true);
             this.recvQueueLen = config.recvQueueLen;
             this.sendQueueLen = config.sendQueueLen;
@@ -357,101 +351,37 @@ public final class Http3ServerConfig extends Http3TransportConfig<Http3ServerCon
     }
 
 
-    static final class QuicChannelInitializer implements ChannelPipelineConfigurer {
+    static final class QuicChannelObserver implements ConnectionObserver {
 
-        final ChannelHandler loggingHandler;
-
-        final Map<AttributeKey<?>, ?> streamAttrs;
+        final ConnectionObserver childObs;
 
         final ConnectionObserver streamObserver;
 
+        final LoggingHandler loggingHandler;
 
-        final Map<ChannelOption<?>, ?> streamOptions;
 
-        final BiFunction<? super Http3ServerRequest, ? super Http3ServerResponse, ? extends Publisher<Void>> streamHandler;
-
-        QuicChannelInitializer(Http3ServerConfig config) {
+        QuicChannelObserver(Http3ServerConfig config, ConnectionObserver childObs) {
+            this.childObs = childObs;
             this.loggingHandler = config.loggingHandler();
-            this.streamAttrs = config.streamAttrs;
-            this.streamObserver = config.streamObserver;
-            this.streamOptions = config.streamOptions;
-            this.streamHandler = config.streamHandler;
+            this.streamObserver = config.streamObserver();
         }
 
         @Override
-        public void onChannelInit(ConnectionObserver observer, Channel channel, @Nullable SocketAddress remoteAddress) {
-            if (log.isDebugEnabled()) {
-                log.debug(format(channel, "初始化一个QuicheQuicChannel"));
+        public void onStateChange(Connection connection, State newState) {
+            if (newState == CONNECTED) {
+                Http3ServerConnectionHandler http3ServerConnectionHandler = new Http3ServerConnectionHandler(
+                        Http3TransportConfig.streamChannelInitializer(loggingHandler, streamObserver, true)
+                );
+                connection.channel().pipeline()
+                        .addBefore(NettyPipeline.ReactiveBridge, "http3ServerConnectionHandler", http3ServerConnectionHandler);
             }
 
-            ChannelPipeline pipeline = channel.pipeline();
-
-            pipeline.remove(NettyPipeline.ReactiveBridge);
-
-            pipeline.addLast(new ConnectionChangeHandler())
-                    .addLast(new Http3ServerConnectionHandler(
-                            streamChannelInitializer(loggingHandler, streamObserver, true)
-                    ))
-                    .addLast(NettyPipeline.ReactiveBridge,
-                             new QuicChannelInboundHandler(observer, loggingHandler, streamAttrs, streamObserver, streamOptions));
-        }
-
-
-    }
-
-    /**
-     * Do not handle channelRead, it will be handled by
-     * io.netty.incubator.codec.quic.QuicheQuicChannel#newChannelPipeline()
-     * It will register the stream.
-     */
-    static final class QuicChannelInboundHandler extends ChannelInboundHandlerAdapter {
-
-        final ConnectionObserver listener;
-
-        final ChannelHandler loggingHandler;
-
-        final Map<AttributeKey<?>, ?> streamAttrs;
-
-        final ConnectionObserver streamObserver;
-
-        final Map<ChannelOption<?>, ?> streamOptions;
-
-        QuicChannelInboundHandler(
-                ConnectionObserver listener,
-                @Nullable ChannelHandler loggingHandler,
-                Map<AttributeKey<?>, ?> streamAttrs,
-                ConnectionObserver streamObserver,
-                Map<ChannelOption<?>, ?> streamOptions) {
-            this.listener = listener;
-            this.loggingHandler = loggingHandler;
-            this.streamAttrs = streamAttrs;
-            this.streamObserver = streamObserver;
-            this.streamOptions = streamOptions;
+            childObs.onStateChange(connection, newState);
         }
 
         @Override
-        public void channelActive(ChannelHandlerContext ctx) {
-            if (ctx.channel().isActive()) {
-                Connection c = Connection.from(ctx.channel());
-                listener.onStateChange(c, CONNECTED);
-                QuicOperations ops = new QuicOperations((QuicChannel) ctx.channel(), loggingHandler, streamObserver, streamAttrs, streamOptions);
-                ops.bind();
-                listener.onStateChange(ops, CONFIGURED);
-            }
-        }
-
-        @Override
-        public void channelInactive(ChannelHandlerContext ctx) {
-            // TODO need more here
-            Connection connection = Connection.from(ctx.channel());
-            listener.onStateChange(connection, ConnectionObserver.State.DISCONNECTING);
-        }
-
-        @Override
-        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-            // TODO need more here
-            Connection connection = Connection.from(ctx.channel());
-            listener.onUncaughtException(connection, cause);
+        public void onUncaughtException(Connection connection, Throwable error) {
+            childObs.onUncaughtException(connection, error);
         }
 
     }

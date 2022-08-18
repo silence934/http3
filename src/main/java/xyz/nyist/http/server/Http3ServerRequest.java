@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package xyz.nyist.http;
+package xyz.nyist.http.server;
 
 import io.netty.channel.Channel;
 import io.netty.handler.codec.http.HttpHeaders;
@@ -30,7 +30,7 @@ import java.util.function.Consumer;
  *
  * @author silence
  */
-public interface Http3ServerRequest extends NettyInbound, Http3StreamInfo {
+public interface Http3ServerRequest extends NettyInbound, Http3ServerInfos {
 
     @Override
     Http3ServerRequest withConnection(Consumer<? super Connection> withConnection);

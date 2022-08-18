@@ -26,7 +26,7 @@ import static reactor.netty.ReactorNetty.format;
 /**
  * @author Violeta Georgieva
  */
-final class QuicOutboundStreamTrafficHandler extends ChannelInboundHandlerAdapter {
+public final class QuicOutboundStreamTrafficHandler extends ChannelInboundHandlerAdapter {
 
     static final Logger log = Loggers.getLogger(QuicOutboundStreamTrafficHandler.class);
 

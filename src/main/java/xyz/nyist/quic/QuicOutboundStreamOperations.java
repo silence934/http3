@@ -27,18 +27,19 @@ import static reactor.netty.ReactorNetty.format;
  *
  * @author Violeta Georgieva
  */
-final class QuicOutboundStreamOperations extends QuicStreamOperations {
+public final class QuicOutboundStreamOperations extends QuicStreamOperations {
 
-	QuicOutboundStreamOperations(Connection connection, ConnectionObserver listener) {
-		super(connection, listener);
-	}
+    public QuicOutboundStreamOperations(Connection connection, ConnectionObserver listener) {
+        super(connection, listener);
+    }
 
-	@Override
-	protected void onOutboundComplete() {
-		if (log.isDebugEnabled()) {
-			log.debug(format(channel(), "Outbound completed. Sending WRITE_FIN."));
-		}
+    @Override
+    protected void onOutboundComplete() {
+        if (log.isDebugEnabled()) {
+            log.debug(format(channel(), "Outbound completed. Sending WRITE_FIN."));
+        }
 
-		sendFinNow();
-	}
+        sendFinNow();
+    }
+
 }

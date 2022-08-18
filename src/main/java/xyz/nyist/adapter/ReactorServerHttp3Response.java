@@ -37,7 +37,7 @@ import reactor.core.publisher.Mono;
 import reactor.netty.ChannelOperationsId;
 import reactor.netty.http.server.HttpServerResponse;
 import xyz.nyist.core.Http3Exception;
-import xyz.nyist.http.Http3ServerResponse;
+import xyz.nyist.http.server.Http3ServerResponse;
 
 import java.nio.file.Path;
 import java.util.List;

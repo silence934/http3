@@ -134,7 +134,6 @@ abstract class Http3UnidirectionalStreamInboundHandler extends ByteToMessageDeco
     private void initControlStream(ChannelHandlerContext ctx) {
         if (ctx.channel().parent().attr(REMOTE_CONTROL_STREAM).setIfAbsent(true) == null) {
             //ctx.pipeline().addLast(localControlStreamHandler);
-            // todo 改动2 client
             Connection c = Connection.from(ctx.channel());
             c.addHandlerLast(localControlStreamHandler);
             // Replace this handler with the codec now.

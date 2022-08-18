@@ -10,8 +10,8 @@ import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.util.Assert;
 import reactor.core.publisher.Mono;
 import xyz.nyist.core.Http3Exception;
-import xyz.nyist.http.Http3ServerRequest;
-import xyz.nyist.http.Http3ServerResponse;
+import xyz.nyist.http.server.Http3ServerRequest;
+import xyz.nyist.http.server.Http3ServerResponse;
 
 import java.net.URISyntaxException;
 import java.util.function.BiFunction;

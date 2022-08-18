@@ -32,10 +32,10 @@ import reactor.util.Logger;
 import reactor.util.Loggers;
 import reactor.util.annotation.Nullable;
 import reactor.util.context.Context;
+import xyz.nyist.http.client.Http3ClientRequest;
+import xyz.nyist.http.client.Http3ClientResponse;
 
-import java.io.IOException;
 import java.util.Map;
-import java.util.Objects;
 import java.util.function.BiFunction;
 
 import static reactor.netty.ConnectionObserver.State.CONFIGURED;
@@ -46,146 +46,161 @@ import static reactor.netty.ReactorNetty.format;
  */
 final class QuicOperations implements ChannelOperationsId, QuicConnection {
 
-	final ChannelHandler           loggingHandler;
-	final QuicChannel              quicChannel;
-	final String                   shortId;
-	final Map<AttributeKey<?>, ?>  streamAttrs;
-	final ConnectionObserver       streamListener;
-	final Map<ChannelOption<?>, ?> streamOptions;
+    static final char CHANNEL_ID_PREFIX = '[';
 
-	QuicOperations(
-			QuicChannel quicChannel,
-			@Nullable ChannelHandler loggingHandler,
-			ConnectionObserver streamListener,
-			Map<AttributeKey<?>, ?> streamAttrs,
-			Map<ChannelOption<?>, ?> streamOptions) {
-		this.loggingHandler = loggingHandler;
-		this.quicChannel = quicChannel;
-		this.shortId = channel().id().asShortText();
-		this.streamAttrs = streamAttrs;
-		this.streamListener = streamListener;
-		this.streamOptions = streamOptions;
-	}
+    static final Logger log = Loggers.getLogger(QuicOperations.class);
 
-	@Override
-	public String asLongText() {
-		String channelStr = channel().toString();
-		int ind = channelStr.indexOf(ORIGINAL_CHANNEL_ID_PREFIX);
-		return new StringBuilder(1 + (channelStr.length() - ORIGINAL_CHANNEL_ID_PREFIX_LENGTH))
-				.append(channelStr.substring(0, ind))
-				.append(CHANNEL_ID_PREFIX)
-				.append(channelStr.substring(ind + ORIGINAL_CHANNEL_ID_PREFIX_LENGTH))
-				.toString();
-	}
+    static final String ORIGINAL_CHANNEL_ID_PREFIX = "[id: 0x";
 
-	@Override
-	public String asShortText() {
-		return shortId;
-	}
+    static final int ORIGINAL_CHANNEL_ID_PREFIX_LENGTH = ORIGINAL_CHANNEL_ID_PREFIX.length();
 
-	@Override
-	public Channel channel() {
-		return quicChannel;
-	}
+    final ChannelHandler loggingHandler;
 
-	@Override
-	public Mono<Void> createStream(
-			QuicStreamType streamType,
-			BiFunction<? super QuicInbound, ? super QuicOutbound, ? extends Publisher<Void>> streamHandler) {
-		Objects.requireNonNull(streamType, "streamType");
-		Objects.requireNonNull(streamHandler, "streamHandler");
+    final QuicChannel quicChannel;
 
-		return Mono.create(sink -> {
-			QuicStreamChannelBootstrap bootstrap = quicChannel.newStreamBootstrap();
-			bootstrap.type(streamType)
-			         .handler(QuicTransportConfig.streamChannelInitializer(loggingHandler,
-			                 streamListener.then(new QuicStreamChannelObserver(sink, streamHandler)), false));
+    final String shortId;
 
-			setAttributes(bootstrap, streamAttrs);
-			setChannelOptions(bootstrap, streamOptions);
+    final Map<AttributeKey<?>, ?> streamAttrs;
 
-			bootstrap.create()
-			         .addListener(f -> {
-			             // We don't need to handle success case, we've already configured QuicStreamChannelObserver
-			             if (!f.isSuccess()) {
-			                 if (f.cause() != null) {
-			                     sink.error(f.cause());
-			                 }
-			                 else {
-			                     sink.error(new IOException("Cannot create stream"));
-			                 }
-			             }
-			         });
-		});
-	}
+    final ConnectionObserver streamListener;
 
-	@SuppressWarnings("unchecked")
-	static void setAttributes(QuicStreamChannelBootstrap bootstrap, Map<AttributeKey<?>, ?> attrs) {
-		for (Map.Entry<AttributeKey<?>, ?> e : attrs.entrySet()) {
-			bootstrap.attr((AttributeKey<Object>) e.getKey(), e.getValue());
-		}
-	}
-	@SuppressWarnings("unchecked")
-	static void setChannelOptions(QuicStreamChannelBootstrap bootstrap, Map<ChannelOption<?>, ?> options) {
-		for (Map.Entry<ChannelOption<?>, ?> e : options.entrySet()) {
-			bootstrap.option((ChannelOption<Object>) e.getKey(), e.getValue());
-		}
-	}
+    final Map<ChannelOption<?>, ?> streamOptions;
 
-	static final char CHANNEL_ID_PREFIX = '[';
+//	@Override
+//	public Mono<Void> createStream(
+//			QuicStreamType streamType,
+//			BiFunction<? super QuicInbound, ? super QuicOutbound, ? extends Publisher<Void>> streamHandler) {
+//		Objects.requireNonNull(streamType, "streamType");
+//		Objects.requireNonNull(streamHandler, "streamHandler");
+//
+//		return Mono.create(sink -> {
+//			QuicStreamChannelBootstrap bootstrap = quicChannel.newStreamBootstrap();
+//			bootstrap.type(streamType)
+//			         .handler(QuicTransportConfig.streamChannelInitializer(loggingHandler,
+//			                 streamListener.then(new QuicStreamChannelObserver(sink, streamHandler)), false));
+//
+//			setAttributes(bootstrap, streamAttrs);
+//			setChannelOptions(bootstrap, streamOptions);
+//
+//			bootstrap.create()
+//			         .addListener(f -> {
+//			             // We don't need to handle success case, we've already configured QuicStreamChannelObserver
+//			             if (!f.isSuccess()) {
+//			                 if (f.cause() != null) {
+//			                     sink.error(f.cause());
+//			                 }
+//			                 else {
+//			                     sink.error(new IOException("Cannot create stream"));
+//			                 }
+//			             }
+//			         });
+//		});
+//	}
 
-	static final Logger log = Loggers.getLogger(QuicOperations.class);
+    QuicOperations(
+            QuicChannel quicChannel,
+            @Nullable ChannelHandler loggingHandler,
+            ConnectionObserver streamListener,
+            Map<AttributeKey<?>, ?> streamAttrs,
+            Map<ChannelOption<?>, ?> streamOptions) {
+        this.loggingHandler = loggingHandler;
+        this.quicChannel = quicChannel;
+        this.shortId = channel().id().asShortText();
+        this.streamAttrs = streamAttrs;
+        this.streamListener = streamListener;
+        this.streamOptions = streamOptions;
+    }
 
-	static final String ORIGINAL_CHANNEL_ID_PREFIX = "[id: 0x";
-	static final int ORIGINAL_CHANNEL_ID_PREFIX_LENGTH = ORIGINAL_CHANNEL_ID_PREFIX.length();
+    @SuppressWarnings("unchecked")
+    static void setAttributes(QuicStreamChannelBootstrap bootstrap, Map<AttributeKey<?>, ?> attrs) {
+        for (Map.Entry<AttributeKey<?>, ?> e : attrs.entrySet()) {
+            bootstrap.attr((AttributeKey<Object>) e.getKey(), e.getValue());
+        }
+    }
 
-	static final class QuicStreamChannelObserver implements ConnectionObserver {
+    @SuppressWarnings("unchecked")
+    static void setChannelOptions(QuicStreamChannelBootstrap bootstrap, Map<ChannelOption<?>, ?> options) {
+        for (Map.Entry<ChannelOption<?>, ?> e : options.entrySet()) {
+            bootstrap.option((ChannelOption<Object>) e.getKey(), e.getValue());
+        }
+    }
 
-		final Context currentContext;
-		final MonoSink<Void> sink;
-		final BiFunction<? super QuicInbound, ? super QuicOutbound, ? extends Publisher<Void>> streamHandler;
+    @Override
+    public String asLongText() {
+        String channelStr = channel().toString();
+        int ind = channelStr.indexOf(ORIGINAL_CHANNEL_ID_PREFIX);
+        return new StringBuilder(1 + (channelStr.length() - ORIGINAL_CHANNEL_ID_PREFIX_LENGTH))
+                .append(channelStr.substring(0, ind))
+                .append(CHANNEL_ID_PREFIX)
+                .append(channelStr.substring(ind + ORIGINAL_CHANNEL_ID_PREFIX_LENGTH))
+                .toString();
+    }
 
-		QuicStreamChannelObserver(
-				MonoSink<Void> sink,
-				BiFunction<? super QuicInbound, ? super QuicOutbound, ? extends Publisher<Void>> streamHandler) {
-			this.currentContext = Context.of(sink.contextView());
-			this.sink = sink;
-			this.streamHandler = streamHandler;
-		}
+    @Override
+    public String asShortText() {
+        return shortId;
+    }
 
-		@Override
-		public Context currentContext() {
-			return currentContext;
-		}
+    @Override
+    public Channel channel() {
+        return quicChannel;
+    }
 
-		@Override
-		@SuppressWarnings("FutureReturnValueIgnored")
-		public void onStateChange(Connection connection, State newState) {
-			if (newState == CONFIGURED) {
-				sink.success();
+    @Override
+    public Mono<Void> createStream(QuicStreamType streamType, BiFunction<? super Http3ClientRequest, ? super Http3ClientResponse, ? extends Publisher<Void>> streamHandler) {
+        return null;
+    }
 
-				try {
-					if (log.isDebugEnabled()) {
-						log.debug(format(connection.channel(), "Handler is being applied: {}"), streamHandler);
-					}
+    static final class QuicStreamChannelObserver implements ConnectionObserver {
 
-					QuicStreamOperations ops = (QuicStreamOperations) connection;
-					Mono.fromDirect(streamHandler.apply(ops, ops))
-					    .subscribe(ops.disposeSubscriber());
-				}
-				catch (Throwable t) {
-					log.error(format(connection.channel(), ""), t);
+        final Context currentContext;
 
-					//"FutureReturnValueIgnored" this is deliberate
-					connection.channel()
-					          .close();
-				}
-			}
-		}
+        final MonoSink<Void> sink;
 
-		@Override
-		public void onUncaughtException(Connection connection, Throwable error) {
-			sink.error(error);
-		}
-	}
+        final BiFunction<? super QuicInbound, ? super QuicOutbound, ? extends Publisher<Void>> streamHandler;
+
+        QuicStreamChannelObserver(
+                MonoSink<Void> sink,
+                BiFunction<? super QuicInbound, ? super QuicOutbound, ? extends Publisher<Void>> streamHandler) {
+            this.currentContext = Context.of(sink.contextView());
+            this.sink = sink;
+            this.streamHandler = streamHandler;
+        }
+
+        @Override
+        public Context currentContext() {
+            return currentContext;
+        }
+
+        @Override
+        @SuppressWarnings("FutureReturnValueIgnored")
+        public void onStateChange(Connection connection, State newState) {
+            if (newState == CONFIGURED) {
+                sink.success();
+
+                try {
+                    if (log.isDebugEnabled()) {
+                        log.debug(format(connection.channel(), "Handler is being applied: {}"), streamHandler);
+                    }
+
+                    QuicStreamOperations ops = (QuicStreamOperations) connection;
+                    Mono.fromDirect(streamHandler.apply(ops, ops))
+                            .subscribe(ops.disposeSubscriber());
+                } catch (Throwable t) {
+                    log.error(format(connection.channel(), ""), t);
+
+                    //"FutureReturnValueIgnored" this is deliberate
+                    connection.channel()
+                            .close();
+                }
+            }
+        }
+
+        @Override
+        public void onUncaughtException(Connection connection, Throwable error) {
+            sink.error(error);
+        }
+
+    }
+
 }

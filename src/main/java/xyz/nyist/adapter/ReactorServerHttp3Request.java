@@ -38,7 +38,7 @@ import reactor.netty.Connection;
 import reactor.netty.http.server.HttpServerRequest;
 import xyz.nyist.core.Http3Headers;
 import xyz.nyist.core.Http3HeadersFrame;
-import xyz.nyist.http.Http3ServerRequest;
+import xyz.nyist.http.server.Http3ServerRequest;
 
 import javax.net.ssl.SSLEngine;
 import java.net.InetSocketAddress;

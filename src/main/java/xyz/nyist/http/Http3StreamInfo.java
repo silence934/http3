@@ -15,13 +15,9 @@
  */
 package xyz.nyist.http;
 
-import io.netty.handler.codec.http.cookie.Cookie;
 import io.netty.incubator.codec.quic.QuicStreamChannel;
 import io.netty.incubator.codec.quic.QuicStreamType;
 import reactor.netty.http.HttpInfos;
-
-import java.util.List;
-import java.util.Map;
 
 /**
  * Exposes information for the {@link QuicStreamChannel} as stream id etc.
@@ -51,13 +47,5 @@ public interface Http3StreamInfo extends HttpInfos {
      */
     QuicStreamType streamType();
 
-
-    /**
-     * Returns resolved HTTP cookies. As opposed to {@link #cookies()}, this
-     * returns all cookies, even if they have the same name.
-     *
-     * @return Resolved HTTP cookies
-     */
-    Map<CharSequence, List<Cookie>> allCookies();
 
 }

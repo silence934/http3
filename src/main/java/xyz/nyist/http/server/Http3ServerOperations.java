@@ -515,19 +515,6 @@ public class Http3ServerOperations extends Http3Operations<Http3ServerRequest, H
                 ReferenceCountUtil.release(msg);
                 return;
             }
-//            if (msg instanceof FullHttpRequest) {
-//                FullHttpRequest request = (FullHttpRequest) msg;
-//                if (request.content().readableBytes() > 0) {
-//                    super.onInboundNext(ctx, msg);
-//                } else {
-//                    request.release();
-//                }
-//                if (isHttp2()) {
-//                    //force auto read to enable more accurate close selection now inbound is done
-//                    channel().config().setAutoRead(true);
-//                    onInboundComplete();
-//                }
-//            }
             return;
         }
         if (msg instanceof Http3DataFrame) {
