@@ -55,7 +55,8 @@ public final class ConnectionInfo {
     }
 
     @Nullable
-    public static ConnectionInfo from(Channel channel, Http3HeadersFrame request,
+    public static ConnectionInfo from(Channel channel,
+                                      @Nullable Http3HeadersFrame request,
                                       @Nullable BiFunction<ConnectionInfo, Http3HeadersFrame, ConnectionInfo> forwardedHeaderHandler) {
         if (!(channel instanceof QuicStreamChannel)) {
             return null;
@@ -66,6 +67,12 @@ public final class ConnectionInfo {
             }
             return connectionInfo;
         }
+    }
+
+
+    @Nullable
+    public static ConnectionInfo from(Channel channel) {
+        return from(channel, null, null);
     }
 
     /**

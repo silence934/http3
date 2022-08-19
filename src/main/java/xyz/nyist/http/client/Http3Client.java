@@ -6,6 +6,7 @@ import io.netty.incubator.codec.quic.QuicChannel;
 import io.netty.incubator.codec.quic.QuicChannelBootstrap;
 import io.netty.resolver.AddressResolverGroup;
 import lombok.extern.slf4j.Slf4j;
+import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscription;
 import reactor.core.CoreSubscriber;
 import reactor.core.Disposable;
@@ -30,6 +31,7 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.time.Duration;
 import java.util.Objects;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -46,7 +48,11 @@ import static reactor.netty.ReactorNetty.format;
 public abstract class Http3Client extends Http3Transport<Http3Client, Http3ClientConfig> {
 
     public static Http3Client create() {
-        return Http3ClientConnect.INSTANCE;
+        return Http3ClientConnect.INSTANCE.initialSettings(spec -> spec.maxData(10000000)
+                .maxStreamDataBidirectionalLocal(1000000)
+                .maxStreamDataUnidirectional(3)
+                .maxStreamsUnidirectional(1024)
+        ).idleTimeout(Duration.ofSeconds(5));
     }
 
     /**
@@ -192,6 +198,13 @@ public abstract class Http3Client extends Http3Transport<Http3Client, Http3Clien
         return dup;
     }
 
+    public final Http3Client handleStream(
+            BiFunction<? super Http3ClientRequest, ? super Http3ClientResponse, ? extends Publisher<Void>> streamHandler) {
+        Objects.requireNonNull(streamHandler, "streamHandler");
+        return observe(new Http3ClientHandle(streamHandler));
+    }
+
+
     public Http3Client resolver(AddressResolverGroup<?> resolver) {
         Objects.requireNonNull(resolver, "resolver");
         Http3Client dup = duplicate();
@@ -221,8 +234,8 @@ public abstract class Http3Client extends Http3Transport<Http3Client, Http3Clien
             this.bindAddress = bindAddress;
             this.currentContext = Context.of(sink.contextView());
             ConnectionObserver observer = new QuicChannelObserver(config.defaultConnectionObserver().then(config.connectionObserver()), sink);
-            this.remoteAddress = config.remoteAddress;
             this.quicChannelInitializer = config.channelInitializer(observer, null, false);
+            this.remoteAddress = config.remoteAddress;
             this.sink = sink;
             this.config = config;
         }
@@ -295,12 +308,12 @@ public abstract class Http3Client extends Http3Transport<Http3Client, Http3Clien
 
     static final class QuicChannelObserver implements ConnectionObserver {
 
-        final ConnectionObserver childObs;
+        final ConnectionObserver connectionObserver;
 
         final MonoSink<Connection> sink;
 
-        QuicChannelObserver(ConnectionObserver childObs, MonoSink<Connection> sink) {
-            this.childObs = childObs;
+        QuicChannelObserver(ConnectionObserver connectionObserver, MonoSink<Connection> sink) {
+            this.connectionObserver = connectionObserver;
             this.sink = sink;
         }
 
@@ -314,16 +327,34 @@ public abstract class Http3Client extends Http3Transport<Http3Client, Http3Clien
                 sink.success(Connection.from(connection.channel()));
             }
 
-            childObs.onStateChange(connection, newState);
+            connectionObserver.onStateChange(connection, newState);
         }
 
         @Override
         public void onUncaughtException(Connection connection, Throwable error) {
             sink.error(error);
-            childObs.onUncaughtException(connection, error);
+            connectionObserver.onUncaughtException(connection, error);
         }
 
     }
 
+
+    static final class Http3ClientHandle implements ConnectionObserver {
+
+        BiFunction<? super Http3ClientRequest, ? super Http3ClientResponse, ? extends Publisher<Void>> streamHandler;
+
+        public Http3ClientHandle(BiFunction<? super Http3ClientRequest, ? super Http3ClientResponse, ? extends Publisher<Void>> streamHandler) {
+            this.streamHandler = streamHandler;
+        }
+
+        @Override
+        public void onStateChange(Connection connection, State newState) {
+            if (newState == CONFIGURED) {
+                QuicConnection quicConnection = (QuicConnection) Connection.from(connection.channel());
+                quicConnection.createStream(streamHandler).block();
+            }
+        }
+
+    }
 
 }

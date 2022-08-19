@@ -11,16 +11,18 @@ import io.netty.handler.codec.http.FullHttpMessage;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.LastHttpContent;
+import io.netty.incubator.codec.quic.QuicStreamChannel;
+import io.netty.incubator.codec.quic.QuicStreamType;
 import io.netty.util.ReferenceCountUtil;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
 import reactor.netty.*;
 import reactor.netty.channel.AbortedException;
 import reactor.netty.channel.ChannelOperations;
-import reactor.netty.http.HttpInfos;
 import reactor.util.Logger;
 import reactor.util.Loggers;
 import reactor.util.annotation.Nullable;
+import xyz.nyist.core.DefaultHttp3DataFrame;
 import xyz.nyist.core.Http3Headers;
 import xyz.nyist.core.Http3HeadersFrame;
 import xyz.nyist.core.Http3Util;
@@ -35,6 +37,7 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
+import static io.netty.buffer.Unpooled.EMPTY_BUFFER;
 import static io.netty.util.internal.ObjectUtil.checkNotNull;
 import static reactor.netty.ReactorNetty.format;
 import static reactor.netty.ReactorNetty.toPrettyHexDump;
@@ -45,7 +48,7 @@ import static reactor.netty.ReactorNetty.toPrettyHexDump;
  * @Description:
  */
 public abstract class Http3Operations<INBOUND extends NettyInbound, OUTBOUND extends NettyOutbound>
-        extends ChannelOperations<INBOUND, OUTBOUND> implements HttpInfos {
+        extends ChannelOperations<INBOUND, OUTBOUND> implements Http3StreamInfo {
 
     static final Pattern SCHEME_PATTERN = Pattern.compile("^(https?|wss?)://.*$");
 
@@ -281,11 +284,10 @@ public abstract class Http3Operations<INBOUND extends NettyInbound, OUTBOUND ext
 
                 if (Http3Util.isContentLengthSet(outboundHttpMessage())) {
                     outboundHttpMessage().headers().remove(HttpHeaderNames.TRANSFER_ENCODING);
-                    if (Http3Util.getContentLength(outboundHttpMessage(), 0) == 0) {
+                    if (Http3Util.getContentLength(outboundHttpMessage()) == 0) {
                         //todo heads设置了contentLength=0
-                        // markSentBody();
-                        // msg = newFullBodyMessage(Unpooled.EMPTY_BUFFER);
-                    } else {
+                        markSentBody();
+                        //msg = newFullBodyMessage(Unpooled.EMPTY_BUFFER);
                     }
                     msg = outboundHttpMessage();
                 } else {
@@ -330,7 +332,34 @@ public abstract class Http3Operations<INBOUND extends NettyInbound, OUTBOUND ext
 
     protected abstract void onHeadersSent();
 
-    protected abstract ChannelFuture writeMessage(ByteBuf body);
+    protected ChannelFuture writeMessage(ByteBuf body) {
+        // For HEAD requests:
+        // - if there is Transfer-Encoding and Content-Length, Transfer-Encoding will be removed
+        // - if there is only Transfer-Encoding, it will be kept and not replaced by
+        // Content-Length: body.readableBytes()
+        // For HEAD requests, the I/O handler may decide to provide only the headers and complete
+        // the response. In that case body will be EMPTY_BUFFER and if we set Content-Length: 0,
+        // this will not be correct
+        // https://github.com/reactor/reactor-netty/issues/1333
+        if (!HttpMethod.HEAD.equals(method())) {
+            outboundHttpMessage().remove(HttpHeaderNames.TRANSFER_ENCODING);
+//            if (!HttpResponseStatus.NOT_MODIFIED.codeAsText().equals(status())) {
+//                if (!Http3Util.isContentLengthSet(nettyRequest)) {
+//                    nettyRequest.headers().setInt(HttpHeaderNames.CONTENT_LENGTH, body.readableBytes());
+//                }
+//            }
+        } else if (Http3Util.isContentLengthSet(outboundHttpMessage())) {
+            //head request and  there is  Content-Length
+            outboundHttpMessage().remove(HttpHeaderNames.TRANSFER_ENCODING);
+        }
+        ChannelFuture writeHeads = channel().write(outboundHttpMessage());
+
+        if (body == null || body == EMPTY_BUFFER) {
+            return writeHeads;
+        }
+        ChannelFuture writeBody = channel().writeAndFlush(new DefaultHttp3DataFrame(body));
+        return CombinationChannelFuture.create(writeHeads, writeBody);
+    }
 
     @Override
     @SuppressWarnings("deprecation")
@@ -353,10 +382,22 @@ public abstract class Http3Operations<INBOUND extends NettyInbound, OUTBOUND ext
      */
     protected abstract Http3HeadersFrame outboundHttpMessage();
 
+
     @Override
-    protected void onInboundNext(ChannelHandlerContext ctx, Object msg) {
-        super.onInboundNext(ctx, msg);
+    public boolean isLocalStream() {
+        return ((QuicStreamChannel) connection().channel()).isLocalCreated();
     }
+
+    @Override
+    public long streamId() {
+        return ((QuicStreamChannel) connection().channel()).streamId();
+    }
+
+    @Override
+    public QuicStreamType streamType() {
+        return ((QuicStreamChannel) connection().channel()).type();
+    }
+
 
     /**
      * Mark the headers sent
@@ -412,6 +453,7 @@ public abstract class Http3Operations<INBOUND extends NettyInbound, OUTBOUND ext
         }
         return HTTP_STATE.compareAndSet(this, READY, BODY_SENT);
     }
+
 
     protected static final class PostHeadersNettyOutbound implements NettyOutbound, Consumer<Throwable>, Runnable {
 
@@ -484,5 +526,6 @@ public abstract class Http3Operations<INBOUND extends NettyInbound, OUTBOUND ext
         }
 
     }
+
 
 }

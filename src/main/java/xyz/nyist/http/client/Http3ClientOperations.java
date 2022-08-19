@@ -4,19 +4,17 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.CompositeByteBuf;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.http.*;
+import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.cookie.ClientCookieDecoder;
 import io.netty.handler.codec.http.cookie.ClientCookieEncoder;
 import io.netty.handler.codec.http.cookie.Cookie;
-import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketClientCompressionHandler;
 import io.netty.handler.timeout.ReadTimeoutHandler;
-import io.netty.incubator.codec.quic.QuicStreamType;
 import lombok.extern.slf4j.Slf4j;
 import org.reactivestreams.Publisher;
-import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
@@ -24,19 +22,19 @@ import reactor.netty.*;
 import reactor.netty.channel.AbortedException;
 import reactor.netty.http.client.HttpClientResponse;
 import reactor.netty.http.client.HttpClientState;
-import reactor.netty.http.client.WebsocketClientSpec;
 import reactor.util.annotation.Nullable;
 import reactor.util.context.ContextView;
-import xyz.nyist.core.*;
-import xyz.nyist.http.CombinationChannelFuture;
+import xyz.nyist.core.DefaultHttp3HeadersFrame;
+import xyz.nyist.core.Http3Headers;
+import xyz.nyist.core.Http3HeadersFrame;
+import xyz.nyist.core.Http3Util;
 import xyz.nyist.http.Cookies;
 import xyz.nyist.http.Http3Operations;
 import xyz.nyist.http.Http3Version;
+import xyz.nyist.http.temp.ConnectionInfo;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.URI;
-import java.nio.channels.ClosedChannelException;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Map;
@@ -65,7 +63,6 @@ public class Http3ClientOperations extends Http3Operations<NettyInbound, NettyOu
     @SuppressWarnings({"unchecked"})
     static final Supplier<String>[] EMPTY_REDIRECTIONS = (Supplier<String>[]) new Supplier[0];
 
-    final boolean isSecure;
 
     final Http3HeadersFrame nettyRequest;
 
@@ -76,6 +73,8 @@ public class Http3ClientOperations extends Http3Operations<NettyInbound, NettyOu
     final ClientCookieDecoder cookieDecoder;
 
     final Sinks.One<Http3HeadersFrame> trailerHeaders;
+
+    final ConnectionInfo connectionInfo;
 
     Supplier<String>[] redirectedFrom = EMPTY_REDIRECTIONS;
 
@@ -91,9 +90,6 @@ public class Http3ClientOperations extends Http3Operations<NettyInbound, NettyOu
 
     boolean retrying;
 
-    boolean is100Continue;
-
-    //RedirectClientException redirecting;
 
     BiPredicate<Http3ClientRequest, HttpClientResponse> followRedirectPredicate;
 
@@ -104,30 +100,27 @@ public class Http3ClientOperations extends Http3Operations<NettyInbound, NettyOu
     BiConsumer<HttpHeaders, Http3ClientRequest> redirectRequestBiConsumer;
 
 
-    public Http3ClientOperations(Connection c, ConnectionObserver listener, ClientCookieEncoder encoder, ClientCookieDecoder decoder) {
+    public Http3ClientOperations(Connection c, ConnectionObserver listener,
+                                 @Nullable ConnectionInfo connectionInfo) {
         super(c, listener);
-        this.isSecure = c.channel()
-                .pipeline()
-                .get(NettyPipeline.SslHandler) != null;
         this.nettyRequest = new DefaultHttp3HeadersFrame();
         this.requestHeaders = nettyRequest.headers();
-
+        this.connectionInfo = connectionInfo;
         this.requestHeaders.method(HttpMethod.GET.asciiName())
                 .authority("www.nyist.xyz:443")
                 .path("/api")
                 .scheme("https");
 
 
-        this.cookieDecoder = decoder;
-        this.cookieEncoder = encoder;
+        this.cookieEncoder = ClientCookieEncoder.STRICT;
+        this.cookieDecoder = ClientCookieDecoder.STRICT;
         this.trailerHeaders = Sinks.unsafe().one();
     }
 
     @Override
-    public Http3ClientRequest addCookie(io.netty.handler.codec.http.cookie.Cookie cookie) {
+    public Http3ClientRequest addCookie(Cookie cookie) {
         if (!hasSentHeaders()) {
-            this.requestHeaders.add(HttpHeaderNames.COOKIE,
-                                    cookieEncoder.encode(cookie));
+            this.requestHeaders.add(HttpHeaderNames.COOKIE, cookieEncoder.encode(cookie));
         } else {
             throw new IllegalStateException("Status and headers already sent");
         }
@@ -135,55 +128,14 @@ public class Http3ClientOperations extends Http3Operations<NettyInbound, NettyOu
     }
 
     @Override
-    public Http3ClientOperations addHandlerLast(ChannelHandler handler) {
-        super.addHandlerLast(handler);
-        return this;
+    public Map<CharSequence, Set<Cookie>> cookies() {
+        Http3ClientOperations.ResponseState responseState = this.responseState;
+        if (responseState != null && responseState.cookieHolder != null) {
+            return responseState.cookieHolder.getCachedCookies();
+        }
+        return Collections.emptyMap();
     }
 
-    @Override
-    public Http3ClientOperations addHandlerLast(String name, ChannelHandler handler) {
-        super.addHandlerLast(name, handler);
-        return this;
-    }
-
-    @Override
-    public Http3ClientOperations addHandlerFirst(ChannelHandler handler) {
-        super.addHandlerFirst(handler);
-        return this;
-    }
-
-    @Override
-    public Http3ClientOperations addHandlerFirst(String name, ChannelHandler handler) {
-        super.addHandlerFirst(name, handler);
-        return this;
-    }
-
-    @Override
-    @SuppressWarnings("deprecation")
-    public Http3ClientOperations addHandler(ChannelHandler handler) {
-        super.addHandler(handler);
-        return this;
-    }
-
-    @Override
-    @SuppressWarnings("FutureReturnValueIgnored")
-    public Http3ClientOperations addHandler(String name, ChannelHandler handler) {
-        // Returned value is deliberately ignored
-        super.addHandler(name, handler);
-        return this;
-    }
-
-    @Override
-    public Http3ClientOperations replaceHandler(String name, ChannelHandler handler) {
-        super.replaceHandler(name, handler);
-        return this;
-    }
-
-    @Override
-    public Http3ClientOperations removeHandler(String name) {
-        super.removeHandler(name);
-        return this;
-    }
 
     @Override
     public Http3ClientRequest addHeader(CharSequence name, CharSequence value) {
@@ -196,8 +148,33 @@ public class Http3ClientOperations extends Http3Operations<NettyInbound, NettyOu
     }
 
     @Override
+    public Http3ClientRequest setHeader(CharSequence name, CharSequence value) {
+        if (!hasSentHeaders()) {
+            this.requestHeaders.set(name, value);
+        } else {
+            throw new IllegalStateException("Status and headers already sent");
+        }
+        return this;
+    }
+
+    @Override
+    public Http3ClientRequest headers(Http3Headers headers) {
+        if (!hasSentHeaders()) {
+            this.requestHeaders.set(headers);
+        } else {
+            throw new IllegalStateException("Status and headers already sent");
+        }
+        return this;
+    }
+
+
+    @Override
     public InetSocketAddress address() {
-        return (InetSocketAddress) channel().remoteAddress();
+        if (connectionInfo != null) {
+            return connectionInfo.getRemoteAddress();
+
+        }
+        return null;
     }
 
     public void chunkedTransfer(boolean chunked) {
@@ -207,21 +184,6 @@ public class Http3ClientOperations extends Http3Operations<NettyInbound, NettyOu
 //        }
     }
 
-    @Override
-    public Http3ClientOperations withConnection(Consumer<? super Connection> withConnection) {
-        Objects.requireNonNull(withConnection, "withConnection");
-        withConnection.accept(this);
-        return this;
-    }
-
-    @Override
-    public Map<CharSequence, Set<Cookie>> cookies() {
-        Http3ClientOperations.ResponseState responseState = this.responseState;
-        if (responseState != null && responseState.cookieHolder != null) {
-            return responseState.cookieHolder.getCachedCookies();
-        }
-        return Collections.emptyMap();
-    }
 
     void followRedirectPredicate(BiPredicate<Http3ClientRequest, HttpClientResponse> predicate) {
         this.followRedirectPredicate = predicate;
@@ -270,32 +232,10 @@ public class Http3ClientOperations extends Http3Operations<NettyInbound, NettyOu
 //            listener().onStateChange(this, HttpClientState.RESPONSE_COMPLETED);
 //        }
 
-
         listener().onStateChange(this, HttpClientState.RESPONSE_COMPLETED);
 
     }
 
-    @Override
-    public Http3ClientRequest header(CharSequence name, CharSequence value) {
-        if (!hasSentHeaders()) {
-            this.requestHeaders.set(name, value);
-        } else {
-            throw new IllegalStateException("Status and headers already sent");
-        }
-        return this;
-    }
-
-    @Override
-    public Http3ClientRequest headers(Http3Headers headers) {
-        if (!hasSentHeaders()) {
-            // String host = requestHeaders.get(HttpHeaderNames.HOST);
-            this.requestHeaders.set(headers);
-            //this.requestHeaders.set(HttpHeaderNames.HOST, host);
-        } else {
-            throw new IllegalStateException("Status and headers already sent");
-        }
-        return this;
-    }
 
     @Override
     public boolean isFollowRedirect() {
@@ -314,21 +254,13 @@ public class Http3ClientOperations extends Http3Operations<NettyInbound, NettyOu
 
     @Override
     public boolean isKeepAlive() {
-//        Http3ClientOperations.ResponseState rs = responseState;
-//        if (rs != null) {
-//            return HttpUtil.isKeepAlive(rs.response);
-//        }
-//        return HttpUtil.isKeepAlive(nettyRequest);
-        return false;
+        Http3ClientOperations.ResponseState rs = responseState;
+        if (rs != null) {
+            return Http3Util.isKeepAlive(rs.response.headers());
+        }
+        return Http3Util.isKeepAlive(nettyRequest.headers());
     }
 
-    @Override
-    public boolean isWebsocket() {
-//        ChannelOperations<?, ?> ops = get(channel());
-//        return ops != null && ops.getClass().equals(WebsocketClientOperations.class);
-//
-        return false;
-    }
 
     @Override
     public HttpMethod method() {
@@ -336,10 +268,23 @@ public class Http3ClientOperations extends Http3Operations<NettyInbound, NettyOu
     }
 
     @Override
-    public final Http3ClientOperations onDispose(Disposable onDispose) {
-        super.onDispose(onDispose);
-        return this;
+    public CharSequence status() {
+        Http3ClientOperations.ResponseState responseState = this.responseState;
+        if (responseState != null) {
+            return responseState.response.headers().status();
+        }
+        throw new IllegalStateException("Trying to access status() while missing response");
     }
+
+
+    @Override
+    public final String uri() {
+        if (requestHeaders != null) {
+            return requestHeaders.path().toString();
+        }
+        throw new IllegalStateException("request not parsed");
+    }
+
 
     @Override
     public ContextView currentContextView() {
@@ -365,7 +310,7 @@ public class Http3ClientOperations extends Http3Operations<NettyInbound, NettyOu
     public Http3HeadersFrame responseHeaders() {
         Http3ClientOperations.ResponseState responseState = this.responseState;
         if (responseState != null) {
-            // return responseState.headers;
+            return responseState.response;
         }
         throw new IllegalStateException("Response headers cannot be accessed without " + "server response");
     }
@@ -423,45 +368,12 @@ public class Http3ClientOperations extends Http3Operations<NettyInbound, NettyOu
         return super.send(source);
     }
 
-    final URI websocketUri() {
-//        URI uri;
-//        try {
-//            String url = uri();
-//            if (url.startsWith(HttpClient.HTTP_SCHEME) || url.startsWith(HttpClient.WS_SCHEME)) {
-//                uri = new URI(url);
-//            } else {
-//                String host = requestHeaders().get(HttpHeaderNames.HOST);
-//                uri = new URI((isSecure ? HttpClient.WSS_SCHEME :
-//                        HttpClient.WS_SCHEME) + "://" + host + (url.startsWith("/") ? url : "/" + url));
-//            }
-//        } catch (URISyntaxException e) {
-//            throw new IllegalArgumentException(e);
-//        }
-//        return uri;
-        return null;
-    }
-
-    @Override
-    public CharSequence status() {
-        Http3ClientOperations.ResponseState responseState = this.responseState;
-        if (responseState != null) {
-            return responseState.response.headers().status();
-        }
-        throw new IllegalStateException("Trying to access status() while missing response");
-    }
 
     @Override
     public Mono<Http3HeadersFrame> trailerHeaders() {
         return trailerHeaders.asMono();
     }
 
-    @Override
-    public final String uri() {
-        if (requestHeaders != null) {
-            return requestHeaders.path().toString();
-        }
-        throw new IllegalStateException("request not parsed");
-    }
 
     @Override
     public final String fullPath() {
@@ -504,35 +416,6 @@ public class Http3ClientOperations extends Http3Operations<NettyInbound, NettyOu
         }
     }
 
-    @Override
-    protected ChannelFuture writeMessage(ByteBuf body) {
-        // For HEAD requests:
-        // - if there is Transfer-Encoding and Content-Length, Transfer-Encoding will be removed
-        // - if there is only Transfer-Encoding, it will be kept and not replaced by
-        // Content-Length: body.readableBytes()
-        // For HEAD requests, the I/O handler may decide to provide only the headers and complete
-        // the response. In that case body will be EMPTY_BUFFER and if we set Content-Length: 0,
-        // this will not be correct
-        // https://github.com/reactor/reactor-netty/issues/1333
-        if (!HttpMethod.HEAD.equals(method())) {
-            requestHeaders.remove(HttpHeaderNames.TRANSFER_ENCODING);
-//            if (!HttpResponseStatus.NOT_MODIFIED.codeAsText().equals(status())) {
-//                if (!Http3Util.isContentLengthSet(nettyRequest)) {
-//                    nettyRequest.headers().setInt(HttpHeaderNames.CONTENT_LENGTH, body.readableBytes());
-//                }
-//            }
-        } else if (Http3Util.isContentLengthSet(nettyRequest)) {
-            //head request and  there is  Content-Length
-            nettyRequest.headers().remove(HttpHeaderNames.TRANSFER_ENCODING);
-        }
-        ChannelFuture writeHeads = channel().write(nettyRequest);
-
-        if (body == null || body == EMPTY_BUFFER) {
-            return writeHeads;
-        }
-        ChannelFuture writeBody = channel().writeAndFlush(new DefaultHttp3DataFrame(body));
-        return CombinationChannelFuture.create(writeHeads, writeBody);
-    }
 
     @Override
     @SuppressWarnings("FutureReturnValueIgnored")
@@ -595,107 +478,13 @@ public class Http3ClientOperations extends Http3Operations<NettyInbound, NettyOu
         return nettyRequest;
     }
 
-//    final boolean notRedirected(HttpResponse response) {
-//        if (isFollowRedirect() && followRedirectPredicate.test(this, this)) {
-//            if (log.isDebugEnabled()) {
-//                log.debug(format(channel(), "Received redirect location: {}"),
-//                          response.headers()
-//                                  .entries()
-//                                  .toString());
-//            }
-//            //redirecting = new RedirectClientException(response.headers());
-//            return false;
-//        }
-//        return true;
-//    }
-
-    // @Override
-//    protected HttpMessage newFullBodyMessage(ByteBuf body) {
-//        HttpRequest request = new DefaultFullHttpRequest(version(), method(), uri(), body);
-//
-//        requestHeaders.setInt(HttpHeaderNames.CONTENT_LENGTH, body.readableBytes());
-//        requestHeaders.remove(HttpHeaderNames.TRANSFER_ENCODING);
-//
-//        request.headers().set(requestHeaders);
-//        return request;
-//    }
-
-    @Override
-    protected Throwable wrapInboundError(Throwable err) {
-        if (err instanceof ClosedChannelException) {
-            //todo PrematureCloseException
-            return new IOException(err);
-        }
-        return super.wrapInboundError(err);
-    }
-
-//    final HttpRequest getNettyRequest() {
-//        return nettyRequest;
-//    }
-
-//    final Mono<Void> send() {
-//        if (!channel().isActive()) {
-//            return Mono.error(AbortedException.beforeSend());
-//        }
-//        if (markSentHeaderAndBody()) {
-//            HttpMessage request = newFullBodyMessage(Unpooled.EMPTY_BUFFER);
-//            return FutureMono.deferFuture(() -> channel().writeAndFlush(request));
-//        } else {
-//            return Mono.empty();
-//        }
-//    }
 
     final void setNettyResponse(Http3HeadersFrame nettyResponse) {
-        Http3ClientOperations.ResponseState state = responseState;
-        if (state == null) {
-            this.responseState =
-                    new Http3ClientOperations.ResponseState(nettyResponse, cookieDecoder);
+        if (responseState == null) {
+            this.responseState = new Http3ClientOperations.ResponseState(nettyResponse, cookieDecoder);
         }
     }
 
-    @SuppressWarnings("FutureReturnValueIgnored")
-    final void withWebsocketSupport(WebsocketClientSpec websocketClientSpec, boolean compress) {
-        URI url = websocketUri();
-        //prevent further header to be sent for handshaking
-        if (markSentHeaders()) {
-            // Returned value is deliberately ignored
-            addHandlerFirst(NettyPipeline.HttpAggregator, new HttpObjectAggregator(8192));
-            removeHandler(NettyPipeline.HttpMetricsHandler);
-
-            if (websocketClientSpec.compress()) {
-                requestHeaders().remove(HttpHeaderNames.ACCEPT_ENCODING);
-                // Returned value is deliberately ignored
-                removeHandler(NettyPipeline.HttpDecompressor);
-                // Returned value is deliberately ignored
-                addHandlerFirst(NettyPipeline.WsCompressionHandler, WebSocketClientCompressionHandler.INSTANCE);
-            }
-
-            if (log.isDebugEnabled()) {
-                log.debug(format(channel(), "Attempting to perform websocket handshake with {}"), url);
-            }
-            // WebsocketClientOperations ops = new WebsocketClientOperations(url, websocketClientSpec, this);
-
-//            if (!rebind(ops)) {
-//                log.error(format(channel(), "Error while rebinding websocket in channel attribute: " +
-//                        get(channel()) + " to " + ops));
-//            }
-        }
-    }
-
-    @Override
-    public boolean isLocalStream() {
-        return false;
-    }
-
-    @Override
-    public long streamId() {
-        return 0;
-    }
-
-    @Override
-    public QuicStreamType streamType() {
-        return null;
-    }
 
     static final class ResponseState {
 

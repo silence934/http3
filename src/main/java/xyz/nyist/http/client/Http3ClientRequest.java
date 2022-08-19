@@ -36,7 +36,7 @@ public interface Http3ClientRequest extends Http3ClientInfos {
      * @param value header value
      * @return this outbound
      */
-    Http3ClientRequest header(CharSequence name, CharSequence value);
+    Http3ClientRequest setHeader(CharSequence name, CharSequence value);
 
     /**
      * Set outbound headers from the passed headers. It will however ignore {@code

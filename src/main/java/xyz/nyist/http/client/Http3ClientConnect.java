@@ -39,7 +39,7 @@ public class Http3ClientConnect extends Http3Client {
                 new Http3ConnectionProvider(),
                 Collections.emptyMap(),
                 Collections.singletonMap(ChannelOption.AUTO_READ, false),
-                () -> new InetSocketAddress(NetUtil.LOCALHOST, 0),
+                () -> new InetSocketAddress(0),
                 () -> new InetSocketAddress(NetUtil.LOCALHOST, DEFAULT_PORT));
     }
 

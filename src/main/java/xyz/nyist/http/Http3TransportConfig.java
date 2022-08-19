@@ -18,8 +18,6 @@ package xyz.nyist.http;
 import io.netty.channel.*;
 import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.socket.DatagramChannel;
-import io.netty.handler.codec.http.cookie.ClientCookieDecoder;
-import io.netty.handler.codec.http.cookie.ClientCookieEncoder;
 import io.netty.incubator.codec.quic.QuicChannel;
 import io.netty.incubator.codec.quic.QuicCongestionControlAlgorithm;
 import io.netty.incubator.codec.quic.QuicSslEngine;
@@ -27,7 +25,6 @@ import io.netty.incubator.codec.quic.QuicStreamChannel;
 import io.netty.util.AttributeKey;
 import lombok.extern.slf4j.Slf4j;
 import org.reactivestreams.Publisher;
-import reactor.core.publisher.Mono;
 import reactor.netty.ChannelPipelineConfigurer;
 import reactor.netty.Connection;
 import reactor.netty.ConnectionObserver;
@@ -38,9 +35,9 @@ import reactor.netty.transport.TransportConfig;
 import reactor.util.annotation.Nullable;
 import xyz.nyist.core.Http3RequestStreamInitializer;
 import xyz.nyist.http.client.Http3ClientOperations;
-import xyz.nyist.http.server.Http3ServerOperations;
 import xyz.nyist.http.server.Http3ServerRequest;
 import xyz.nyist.http.server.Http3ServerResponse;
+import xyz.nyist.http.temp.ConnectionInfo;
 import xyz.nyist.quic.QuicInitialSettingsSpec;
 import xyz.nyist.quic.QuicResources;
 
@@ -167,6 +164,7 @@ public abstract class Http3TransportConfig<CONF extends TransportConfig> extends
         this.streamHandler = parent.streamHandler;
         this.streamObserver = parent.streamObserver;
         this.streamOptions = parent.streamOptions;
+        this.initialSettings = parent.initialSettings;
     }
 
     protected static <K, V> Map<K, V> updateMap(Map<K, V> parentMap, Object key, @Nullable Object value) {
@@ -495,22 +493,21 @@ public abstract class Http3TransportConfig<CONF extends TransportConfig> extends
         @Override
         protected void initChannel(QuicStreamChannel ch) {
             if (log.isDebugEnabled()) {
-                log.debug(format(ch, "初始化一个QuicStreamChannel"));
+                log.debug(format(ch, "init a quicStreamChannel"));
             }
 
             if (loggingHandler != null) {
                 ch.pipeline().addLast(loggingHandler);
             }
             if (inbound) {
-                //ch.pipeline().addLast(new Http3FrameToHttpObjectCodec(true, false));
-//                        .addLast(new HttpObjectAggregator(512 * 1024));
-                //ChannelOperations.addReactiveBridge(ch, (conn, observer, msg) -> new Http3ServerOperations(conn, observer), streamListener);
+                //Http3InboundStreamTrafficHandler 需要在 ChannelOperationsHandler 之后添加
+                //因为Http3InboundStreamTrafficHandler的handlerAdded触发ctx.read()之后
+                //才开始读取数据，这样才能触发 ChannelOperationsHandler 的 channelRead()
                 ChannelOperations.addReactiveBridge(ch, ChannelOperations.OnSetup.empty(), streamListener);
                 ch.pipeline().addBefore(NettyPipeline.ReactiveBridge,
                                         NettyPipeline.HttpTrafficHandler, new Http3InboundStreamTrafficHandler(streamListener));
             } else {
-                ch.pipeline().addLast(new Http3OutboundStreamTrafficHandler());
-                //todo 改动1 client
+                ch.pipeline().addLast(NettyPipeline.HttpTrafficHandler, new Http3OutboundStreamTrafficHandler());
                 ch.pipeline().addLast(new Http3RequestStreamInitializer() {
                     @Override
                     protected void initRequestStream(QuicStreamChannel ch) {
@@ -519,54 +516,12 @@ public abstract class Http3TransportConfig<CONF extends TransportConfig> extends
 //                                .addLast(new HttpObjectAggregator(512 * 1024));
                     }
                 });
-                ChannelOperations.addReactiveBridge(ch, (conn, observer, msg) -> new Http3ClientOperations(conn, observer,
-                                                                                                           ClientCookieEncoder.STRICT,
-                                                                                                           ClientCookieDecoder.STRICT), streamListener);
+                ChannelOperations.addReactiveBridge(ch, (conn, observer, msg) -> new Http3ClientOperations(conn, observer, ConnectionInfo.from(ch)), streamListener);
             }
         }
 
     }
 
-    protected static final class QuicStreamChannelObserver implements ConnectionObserver {
-
-        final BiFunction<? super Http3ServerRequest, ? super Http3ServerResponse, ? extends Publisher<Void>> streamHandler;
-
-        public QuicStreamChannelObserver(
-                @Nullable BiFunction<? super Http3ServerRequest, ? super Http3ServerResponse, ? extends Publisher<Void>> streamHandler) {
-            this.streamHandler = streamHandler;
-        }
-
-        @Override
-        @SuppressWarnings("FutureReturnValueIgnored")
-        public void onStateChange(Connection connection, State newState) {
-            if (newState == CONFIGURED) {
-                if (streamHandler == null) {
-                    if (log.isDebugEnabled()) {
-                        log.debug(format(connection.channel(), "IO handler for incoming streams is not specified," +
-                                " the incoming stream is closed."));
-                    }
-                    //"FutureReturnValueIgnored" this is deliberate
-                    connection.channel().close();
-                    return;
-                }
-                try {
-                    if (log.isDebugEnabled()) {
-                        log.debug(format(connection.channel(), "streamHandler正在被使用: {}"), streamHandler.getClass().getSimpleName());
-                    }
-                    Http3ServerOperations ops = (Http3ServerOperations) connection;
-                    Mono.fromDirect(streamHandler.apply(ops, ops))
-                            .subscribe(ops.disposeSubscriber());
-                } catch (Throwable t) {
-                    log.error(format(connection.channel(), ""), t);
-
-                    //"FutureReturnValueIgnored" this is deliberate
-                    connection.channel()
-                            .close();
-                }
-            }
-        }
-
-    }
 
     static final class QuicTransportDoOn implements ConnectionObserver {
 

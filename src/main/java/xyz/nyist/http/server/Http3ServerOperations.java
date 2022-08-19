@@ -1,6 +1,5 @@
 package xyz.nyist.http.server;
 
-import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
@@ -12,7 +11,6 @@ import io.netty.handler.codec.http.cookie.Cookie;
 import io.netty.handler.codec.http.cookie.ServerCookieDecoder;
 import io.netty.handler.codec.http.cookie.ServerCookieEncoder;
 import io.netty.incubator.codec.quic.QuicStreamChannel;
-import io.netty.incubator.codec.quic.QuicStreamType;
 import io.netty.util.AsciiString;
 import io.netty.util.ReferenceCountUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -29,7 +27,10 @@ import reactor.netty.http.websocket.WebsocketOutbound;
 import reactor.util.annotation.Nullable;
 import reactor.util.context.Context;
 import xyz.nyist.core.*;
-import xyz.nyist.http.*;
+import xyz.nyist.http.Http3Operations;
+import xyz.nyist.http.Http3ServerFormDecoderProvider;
+import xyz.nyist.http.Http3Version;
+import xyz.nyist.http.ServerCookies;
 import xyz.nyist.http.temp.ConnectionInfo;
 
 import java.net.InetSocketAddress;
@@ -179,21 +180,6 @@ public class Http3ServerOperations extends Http3Operations<Http3ServerRequest, H
     }
 
     @Override
-    public boolean isLocalStream() {
-        return ((QuicStreamChannel) connection().channel()).isLocalCreated();
-    }
-
-    @Override
-    public long streamId() {
-        return ((QuicStreamChannel) connection().channel()).streamId();
-    }
-
-    @Override
-    public QuicStreamType streamType() {
-        return ((QuicStreamChannel) connection().channel()).type();
-    }
-
-    @Override
     public NettyOutbound sendHeaders() {
         if (hasSentHeaders()) {
             return this;
@@ -237,37 +223,6 @@ public class Http3ServerOperations extends Http3Operations<Http3ServerRequest, H
 //        res.headers().set(responseHeaders);
 //        return res;
 //    }
-
-
-    @Override
-    protected ChannelFuture writeMessage(ByteBuf body) {
-        // For HEAD requests:
-        // - if there is Transfer-Encoding and Content-Length, Transfer-Encoding will be removed
-        // - if there is only Transfer-Encoding, it will be kept and not replaced by
-        // Content-Length: body.readableBytes()
-        // For HEAD requests, the I/O handler may decide to provide only the headers and complete
-        // the response. In that case body will be EMPTY_BUFFER and if we set Content-Length: 0,
-        // this will not be correct
-        // https://github.com/reactor/reactor-netty/issues/1333
-        if (!HttpMethod.HEAD.equals(method())) {
-            responseHeadsFrame.headers().remove(HttpHeaderNames.TRANSFER_ENCODING);
-            if (!HttpResponseStatus.NOT_MODIFIED.codeAsText().equals(status())) {
-                if (!Http3Util.isContentLengthSet(responseHeadsFrame)) {
-                    responseHeadsFrame.headers().setInt(HttpHeaderNames.CONTENT_LENGTH, body.readableBytes());
-                }
-            }
-        } else if (Http3Util.isContentLengthSet(responseHeadsFrame)) {
-            //head request and  there is  Content-Length
-            responseHeadsFrame.headers().remove(HttpHeaderNames.TRANSFER_ENCODING);
-        }
-        ChannelFuture writeHeads = channel().write(responseHeadsFrame);
-
-        if (body == null || body == EMPTY_BUFFER) {
-            return writeHeads;
-        }
-        ChannelFuture writeBody = channel().writeAndFlush(new DefaultHttp3DataFrame(body));
-        return CombinationChannelFuture.create(writeHeads, writeBody);
-    }
 
 
     @Override
