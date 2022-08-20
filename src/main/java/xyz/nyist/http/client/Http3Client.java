@@ -16,12 +16,10 @@ import reactor.core.publisher.Operators;
 import reactor.netty.ChannelBindException;
 import reactor.netty.Connection;
 import reactor.netty.ConnectionObserver;
-import reactor.netty.NettyPipeline;
 import reactor.netty.transport.AddressUtils;
 import reactor.netty.transport.TransportConfig;
 import reactor.netty.transport.TransportConnector;
 import reactor.util.context.Context;
-import xyz.nyist.core.Http3ClientConnectionHandler;
 import xyz.nyist.http.Http3Transport;
 import xyz.nyist.quic.QuicConnection;
 
@@ -33,10 +31,10 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static reactor.netty.ConnectionObserver.State.CONFIGURED;
-import static reactor.netty.ConnectionObserver.State.CONNECTED;
 import static reactor.netty.ReactorNetty.format;
 
 /**
@@ -198,13 +196,6 @@ public abstract class Http3Client extends Http3Transport<Http3Client, Http3Clien
         return dup;
     }
 
-    public final Http3Client handleStream(
-            BiFunction<? super Http3ClientRequest, ? super Http3ClientResponse, ? extends Publisher<Void>> streamHandler) {
-        Objects.requireNonNull(streamHandler, "streamHandler");
-        return observe(new Http3ClientHandle(streamHandler));
-    }
-
-
     public Http3Client resolver(AddressResolverGroup<?> resolver) {
         Objects.requireNonNull(resolver, "resolver");
         Http3Client dup = duplicate();
@@ -212,6 +203,207 @@ public abstract class Http3Client extends Http3Transport<Http3Client, Http3Clien
         return dup;
     }
 
+
+    public final Http3Client handleStream(
+            BiFunction<? super Http3ClientRequest, ? super Http3ClientResponse, ? extends Publisher<Void>> streamHandler) {
+        Objects.requireNonNull(streamHandler, "streamHandler");
+        return observe(new Http3ClientHandle(streamHandler));
+    }
+
+
+    public final Http3Client sendHandler(
+            Function<? super Http3ClientRequest, ? extends Publisher<Void>> sendHandler) {
+        Objects.requireNonNull(sendHandler, "sendHandler");
+        Http3Client dup = duplicate();
+        dup.configuration().sendHandler = sendHandler;
+        return dup;
+    }
+
+    public final Http3Client response(
+            Function<? super Http3ClientResponse, ? extends Publisher<Void>> responseHandler) {
+        Objects.requireNonNull(responseHandler, "responseHandler");
+        Http3Client dup = duplicate();
+        dup.configuration().responseHandler = responseHandler;
+        return dup;
+    }
+
+
+    public final void executeNow() {
+        executeNow(Duration.ofSeconds(45));
+    }
+
+    public final void executeNow(Duration timeout) {
+        Objects.requireNonNull(timeout, "timeout");
+        try {
+            execute().log().block(timeout);
+        } catch (IllegalStateException e) {
+            if (e.getMessage().contains("blocking read")) {
+                throw new IllegalStateException("Http3Client couldn't be started within " + timeout.toMillis() + "ms");
+            }
+            throw e;
+        }
+    }
+
+    public Mono<Void> execute() {
+        Http3ClientConfig config = configuration();
+
+
+        Mono<Void> mono = Mono.create(sink -> {
+            SocketAddress local = Objects.requireNonNull(config.bindAddress().get(), "Bind Address supplier returned null");
+            if (local instanceof InetSocketAddress) {
+                InetSocketAddress localInet = (InetSocketAddress) local;
+
+                if (localInet.isUnresolved()) {
+                    local = AddressUtils.createResolved(localInet.getHostName(), localInet.getPort());
+                }
+            }
+
+            DisposableRequest disposableConnect = new DisposableRequest(config, local, sink);
+            TransportConnector.bind(config, config.parentChannelInitializer(), local, false)
+                    .subscribe(disposableConnect);
+        });
+        mono = mono.doOnError(t -> t.printStackTrace());
+
+
+        if (config.doOnConnect != null) {
+            mono = mono.doOnSubscribe(s -> config.doOnConnect.accept(config));
+        }
+        return mono;
+    }
+
+
+    static final class DisposableRequest implements CoreSubscriber<Channel>, Disposable {
+
+
+        final SocketAddress bindAddress;
+
+        final Context currentContext;
+
+        final Supplier<? extends SocketAddress> remoteAddress;
+
+        final TransportConfig config;
+
+        final ChannelInitializer<Channel> quicChannelInitializer;
+
+        final MonoSink<Void> sink;
+
+        Subscription subscription;
+
+        DisposableRequest(Http3ClientConfig config, SocketAddress bindAddress, MonoSink<Void> sink) {
+            this.bindAddress = bindAddress;
+            this.currentContext = Context.of(sink.contextView());
+            ConnectionObserver connectionObserver = config.defaultConnectionObserver().then(config.connectionObserver());
+            ConnectionObserver observer = new ConnectionObserver() {
+                @Override
+                public void onStateChange(Connection connection, State newState) {
+                    connectionObserver.onStateChange(connection, newState);
+                    if (newState == CONFIGURED) {
+                        QuicConnection quicConnection = (QuicConnection) Connection.from(connection.channel());
+
+                        quicConnection.createStream((http3ClientRequest, http3ClientResponse) -> {
+                            config.responseHandler.apply(http3ClientResponse).subscribe(new CoreSubscriber<Void>() {
+                                @Override
+                                public void onSubscribe(Subscription s) {
+                                    s.request(Long.MAX_VALUE);
+                                }
+
+                                @Override
+                                public void onNext(Void unused) {
+
+                                }
+
+                                @Override
+                                public void onError(Throwable t) {
+                                    sink.error(t);
+                                }
+
+                                @Override
+                                public void onComplete() {
+                                    sink.success();
+                                }
+                            });
+                            return config.sendHandler.apply(http3ClientRequest);
+                        }).subscribe();
+                    }
+                }
+
+                @Override
+                public void onUncaughtException(Connection connection, Throwable error) {
+                    sink.error(error);
+                    connectionObserver.onUncaughtException(connection, error);
+                }
+            };
+            this.quicChannelInitializer = config.channelInitializer(observer, null, false);
+            this.remoteAddress = config.remoteAddress;
+            this.sink = sink;
+            this.config = config;
+        }
+
+
+        @Override
+        public Context currentContext() {
+            return currentContext;
+        }
+
+        @Override
+        public void dispose() {
+            subscription.cancel();
+        }
+
+        @Override
+        public void onComplete() {
+        }
+
+        @Override
+        public void onError(Throwable t) {
+            if (t instanceof BindException ||
+                    // With epoll/kqueue transport it is
+                    // io.netty.channel.unix.Errors$NativeIoException: bind(..) failed: Address already in use
+                    (t instanceof IOException && t.getMessage() != null && t.getMessage().contains("bind(..)"))) {
+                sink.error(ChannelBindException.fail(bindAddress, null));
+            } else {
+                sink.error(t);
+            }
+        }
+
+        @Override
+        public void onNext(Channel channel) {
+            if (log.isDebugEnabled()) {
+                log.debug(format(channel, "Bound new channel"));
+            }
+
+            final SocketAddress remote = Objects.requireNonNull(remoteAddress.get(), "Remote Address supplier returned null");
+
+            QuicChannelBootstrap bootstrap =
+                    QuicChannel.newBootstrap(channel)
+                            .remoteAddress(remote)
+                            .handler(quicChannelInitializer);
+//                            .streamHandler(
+//                                    QuicTransportConfig.streamChannelInitializer(loggingHandler, streamObserver, true));
+
+            bootstrap.connect()
+                    .addListener(f -> {
+                        // We don't need to handle success case, we've already configured QuicChannelObserver
+                        if (!f.isSuccess()) {
+                            if (f.cause() != null) {
+                                sink.error(f.cause());
+                            } else {
+                                sink.error(new IOException("Cannot connect to [" + remote + "]"));
+                            }
+                        }
+                    });
+        }
+
+        @Override
+        public void onSubscribe(Subscription s) {
+            if (Operators.validate(subscription, s)) {
+                this.subscription = s;
+                sink.onCancel(this);
+                s.request(Long.MAX_VALUE);
+            }
+        }
+
+    }
 
     static final class DisposableConnect implements CoreSubscriber<Channel>, Disposable {
 
@@ -319,10 +511,6 @@ public abstract class Http3Client extends Http3Transport<Http3Client, Http3Clien
 
         @Override
         public void onStateChange(Connection connection, State newState) {
-            if (newState == CONNECTED) {
-                connection.channel().pipeline()
-                        .addBefore(NettyPipeline.ReactiveBridge, "Http3ClientConnectionHandler", new Http3ClientConnectionHandler());
-            }
             if (newState == CONFIGURED) {
                 sink.success(Connection.from(connection.channel()));
             }
@@ -337,7 +525,6 @@ public abstract class Http3Client extends Http3Transport<Http3Client, Http3Clien
         }
 
     }
-
 
     static final class Http3ClientHandle implements ConnectionObserver {
 

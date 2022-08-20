@@ -68,6 +68,7 @@ public final class Http3InboundStreamTrafficHandler extends ChannelInboundHandle
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Http3Exception {
+        log.debug("{}收到消息:{}", ctx.channel(), msg.getClass().getSimpleName());
         if (remoteAddress == null) {
             remoteAddress = ctx.channel().remoteAddress();
 //                    Optional.ofNullable(HAProxyMessageReader.resolveRemoteAddressFromProxyProtocol(ctx.channel()))

@@ -5,6 +5,7 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.socket.ChannelInputShutdownReadComplete;
 import lombok.extern.slf4j.Slf4j;
 import reactor.netty.channel.ChannelOperations;
+import xyz.nyist.core.Http3Exception;
 import xyz.nyist.http.client.Http3ClientOperations;
 
 import static reactor.netty.ReactorNetty.format;
@@ -16,6 +17,18 @@ import static reactor.netty.ReactorNetty.format;
  */
 @Slf4j
 public class Http3OutboundStreamTrafficHandler extends ChannelInboundHandlerAdapter {
+
+
+    @Override
+    public void channelActive(ChannelHandlerContext ctx) throws Exception {
+        super.channelActive(ctx);
+    }
+
+    @Override
+    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Http3Exception {
+        log.debug("{}收到消息:{}", ctx.channel(), msg.getClass().getSimpleName());
+        ctx.fireChannelRead(msg);
+    }
 
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) {

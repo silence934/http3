@@ -7,7 +7,6 @@ import io.netty.incubator.codec.quic.QuicSslContextBuilder;
 import xyz.nyist.core.Http3;
 import xyz.nyist.http.client.Http3Client;
 import xyz.nyist.http.client.Http3ClientOperations;
-import xyz.nyist.quic.QuicConnection;
 
 import java.net.InetSocketAddress;
 
@@ -24,21 +23,39 @@ public class Http3ClientTest {
                 .trustManager(InsecureTrustManagerFactory.INSTANCE)
                 .applicationProtocols(Http3.supportedApplicationProtocols()).build();
 
-        QuicConnection client = (QuicConnection) Http3Client.create()
+        //QuicConnection client = (QuicConnection)
+        Http3Client.create()
                 .remoteAddress(() -> new InetSocketAddress("www.nyist.xyz", 443))
                 .secure(context)
-                .handleStream((in, out) -> {
-                    Http3ClientOperations operations = (Http3ClientOperations) out;
-
-                    operations.receive()
-                            .asString()
-                            .defaultIfEmpty("Hello Empty!")
-                            .subscribe(System.out::println);
-
+//                .handleStream((in, out) -> {
+//                    Http3ClientOperations operations = (Http3ClientOperations) out;
+//
+//                    operations.receive()
+//                            .asString()
+//                            .defaultIfEmpty("Hello Empty!")
+//                            .subscribe(System.out::println);
+//
+//                    return operations.sendObject(Unpooled.EMPTY_BUFFER);
+//                })
+                .sendHandler(http3ClientRequest -> {
+                    Http3ClientOperations operations = (Http3ClientOperations) http3ClientRequest;
                     return operations.sendObject(Unpooled.EMPTY_BUFFER);
                 })
-                .connectNow();
-
+                .response(http3ClientResponse -> {
+                    System.out.println("response 执行");
+                    Http3ClientOperations operations = (Http3ClientOperations) http3ClientResponse;
+                    return operations.receive()
+                            .asString()
+                            .defaultIfEmpty("Hello Empty!")
+                            .doOnNext(i -> System.out.println("33333" + i))
+                            .then();
+//                    operations.receive()
+//                            .asString()
+//                            .defaultIfEmpty("Hello Empty!")
+//                            .subscribe(System.out::println);
+//                    return null;
+                })
+                .executeNow();
 
 //        client.createStream(
 //                        (in, out) -> {
@@ -55,8 +72,8 @@ public class Http3ClientTest {
 //                            // return out.sendString(Mono.just("123345\r\n"));
 //                        })
 //                .block(Duration.ofSeconds(15));
-
-        Thread.sleep(10000);
+//
+//        Thread.sleep(10000);
 
     }
 

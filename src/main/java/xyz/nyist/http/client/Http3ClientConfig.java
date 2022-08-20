@@ -13,13 +13,16 @@ import io.netty.incubator.codec.quic.QuicCongestionControlAlgorithm;
 import io.netty.incubator.codec.quic.QuicSslEngine;
 import io.netty.resolver.AddressResolverGroup;
 import lombok.extern.slf4j.Slf4j;
+import org.reactivestreams.Publisher;
 import reactor.netty.Connection;
 import reactor.netty.ConnectionObserver;
+import reactor.netty.NettyPipeline;
 import reactor.netty.channel.ChannelMetricsRecorder;
 import reactor.netty.channel.MicrometerChannelMetricsRecorder;
 import reactor.netty.resources.ConnectionProvider;
 import reactor.netty.transport.logging.AdvancedByteBufFormat;
 import reactor.util.annotation.Nullable;
+import xyz.nyist.core.Http3ClientConnectionHandler;
 import xyz.nyist.http.Http3TransportConfig;
 import xyz.nyist.quic.QuicClient;
 import xyz.nyist.quic.QuicConnection;
@@ -34,6 +37,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+
+import static reactor.netty.ConnectionObserver.State.CONNECTED;
 
 /**
  * @author: fucong
@@ -62,6 +67,10 @@ public class Http3ClientConfig extends Http3TransportConfig<Http3ClientConfig> {
 
     AddressResolverGroup<?> resolver;
 
+    Function<? super Http3ClientRequest, ? extends Publisher<Void>> sendHandler;
+
+    Function<? super Http3ClientResponse, ? extends Publisher<Void>> responseHandler;
+
 
     Http3ClientConfig(
             ConnectionProvider connectionProvider,
@@ -82,6 +91,8 @@ public class Http3ClientConfig extends Http3TransportConfig<Http3ClientConfig> {
         this.doOnDisconnected = parent.doOnDisconnected;
         this.remoteAddress = parent.remoteAddress;
         this.resolver = parent.resolver;
+        this.sendHandler = parent.sendHandler;
+        this.responseHandler = parent.responseHandler;
     }
 
 
@@ -135,10 +146,16 @@ public class Http3ClientConfig extends Http3TransportConfig<Http3ClientConfig> {
 
     @Override
     protected ConnectionObserver defaultConnectionObserver() {
+        ConnectionObserver observer = (connection, newState) -> {
+            if (newState == CONNECTED) {
+                connection.channel().pipeline()
+                        .addBefore(NettyPipeline.ReactiveBridge, "Http3ClientConnectionHandler", new Http3ClientConnectionHandler());
+            }
+        };
         if (channelGroup() == null && doOnConnected() == null && doOnDisconnected() == null) {
-            return super.defaultConnectionObserver();
+            return observer.then(super.defaultConnectionObserver());
         }
-        return super.defaultConnectionObserver()
+        return observer.then(super.defaultConnectionObserver())
                 .then(new QuicClientDoOn(channelGroup(), doOnConnected(), doOnDisconnected()));
     }
 

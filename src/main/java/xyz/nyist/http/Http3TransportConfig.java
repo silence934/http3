@@ -507,7 +507,6 @@ public abstract class Http3TransportConfig<CONF extends TransportConfig> extends
                 ch.pipeline().addBefore(NettyPipeline.ReactiveBridge,
                                         NettyPipeline.HttpTrafficHandler, new Http3InboundStreamTrafficHandler(streamListener));
             } else {
-                ch.pipeline().addLast(NettyPipeline.HttpTrafficHandler, new Http3OutboundStreamTrafficHandler());
                 ch.pipeline().addLast(new Http3RequestStreamInitializer() {
                     @Override
                     protected void initRequestStream(QuicStreamChannel ch) {
@@ -516,6 +515,7 @@ public abstract class Http3TransportConfig<CONF extends TransportConfig> extends
 //                                .addLast(new HttpObjectAggregator(512 * 1024));
                     }
                 });
+                ch.pipeline().addLast(NettyPipeline.HttpTrafficHandler, new Http3OutboundStreamTrafficHandler());
                 ChannelOperations.addReactiveBridge(ch, (conn, observer, msg) -> new Http3ClientOperations(conn, observer, ConnectionInfo.from(ch)), streamListener);
             }
         }

@@ -205,6 +205,7 @@ final class Http3FrameCodec extends ByteToMessageDecoder implements ChannelOutbo
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+        log.debug("{}  channelRead:" + msg.getClass().getSimpleName(), ctx.channel());
         ByteBuf buffer;
         if (msg instanceof QuicStreamFrame) {
             QuicStreamFrame streamFrame = (QuicStreamFrame) msg;
