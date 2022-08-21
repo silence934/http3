@@ -39,7 +39,7 @@ public interface QuicConnection extends Connection {
      * @param streamHandler the I/O handler for the stream
      * @return a {@link Mono} completing when the stream is created, otherwise fails
      */
-    default Mono<Void> createStream(
+    default Mono<Connection> createStream(
             BiFunction<? super Http3ClientRequest, ? super Http3ClientResponse, ? extends Publisher<Void>> streamHandler) {
         return createStream(QuicStreamType.BIDIRECTIONAL, streamHandler);
     }
@@ -53,7 +53,7 @@ public interface QuicConnection extends Connection {
      * @param streamHandler the I/O handler for the stream
      * @return a {@link Mono} completing when the stream is created, otherwise fails
      */
-    Mono<Void> createStream(
+    Mono<Connection> createStream(
             QuicStreamType streamType,
             BiFunction<? super Http3ClientRequest, ? super Http3ClientResponse, ? extends Publisher<Void>> streamHandler);
 

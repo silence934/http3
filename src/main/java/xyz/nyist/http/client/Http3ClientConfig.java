@@ -14,6 +14,9 @@ import io.netty.incubator.codec.quic.QuicSslEngine;
 import io.netty.resolver.AddressResolverGroup;
 import lombok.extern.slf4j.Slf4j;
 import org.reactivestreams.Publisher;
+import org.reactivestreams.Subscription;
+import reactor.core.CoreSubscriber;
+import reactor.core.publisher.MonoSink;
 import reactor.netty.Connection;
 import reactor.netty.ConnectionObserver;
 import reactor.netty.NettyPipeline;
@@ -38,6 +41,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import static reactor.netty.ConnectionObserver.State.CONFIGURED;
 import static reactor.netty.ConnectionObserver.State.CONNECTED;
 
 /**
@@ -148,8 +152,8 @@ public class Http3ClientConfig extends Http3TransportConfig<Http3ClientConfig> {
     protected ConnectionObserver defaultConnectionObserver() {
         ConnectionObserver observer = (connection, newState) -> {
             if (newState == CONNECTED) {
-                connection.channel().pipeline()
-                        .addBefore(NettyPipeline.ReactiveBridge, "Http3ClientConnectionHandler", new Http3ClientConnectionHandler());
+//                connection.channel().pipeline()
+//                        .addBefore(NettyPipeline.ReactiveBridge, "Http3ClientConnectionHandler", new Http3ClientConnectionHandler());
             }
         };
         if (channelGroup() == null && doOnConnected() == null && doOnDisconnected() == null) {
@@ -170,6 +174,9 @@ public class Http3ClientConfig extends Http3TransportConfig<Http3ClientConfig> {
         return MicrometerQuicClientMetricsRecorder.INSTANCE;
     }
 
+    protected ConnectionObserver observer(MonoSink<Connection> sink) {
+        return new Http3Observer(sendHandler, responseHandler, sink);
+    }
 
     @Override
     protected ChannelInitializer<Channel> parentChannelInitializer() {
@@ -297,7 +304,7 @@ public class Http3ClientConfig extends Http3TransportConfig<Http3ClientConfig> {
                 channelGroup.add(connection.channel());
                 return;
             }
-            if (doOnConnected != null && newState == State.CONFIGURED) {
+            if (doOnConnected != null && newState == CONFIGURED) {
                 doOnConnected.accept((QuicConnection) connection);
                 return;
             }
@@ -308,6 +315,59 @@ public class Http3ClientConfig extends Http3TransportConfig<Http3ClientConfig> {
                     doOnDisconnected.accept((QuicConnection) connection);
                 }
             }
+        }
+
+    }
+
+
+    static final class Http3Observer implements ConnectionObserver {
+
+        Function<? super Http3ClientRequest, ? extends Publisher<Void>> sendHandler;
+
+        Function<? super Http3ClientResponse, ? extends Publisher<Void>> responseHandler;
+
+        MonoSink<Connection> sink;
+
+        public Http3Observer(Function<? super Http3ClientRequest, ? extends Publisher<Void>> sendHandler,
+                             Function<? super Http3ClientResponse, ? extends Publisher<Void>> responseHandler,
+                             MonoSink<Connection> sink) {
+            this.sendHandler = sendHandler;
+            this.responseHandler = responseHandler;
+            this.sink = sink;
+        }
+
+        @Override
+        public void onStateChange(Connection connection, State newState) {
+            if (newState == CONNECTED) {
+                connection.channel().pipeline()
+                        .addBefore(NettyPipeline.ReactiveBridge, "Http3ClientConnectionHandler", new Http3ClientConnectionHandler());
+            }
+            if (newState == CONFIGURED && sendHandler != null) {
+                QuicConnection quicConnection = (QuicConnection) Connection.from(connection.channel());
+                quicConnection.createStream((http3ClientRequest, http3ClientResponse) -> sendHandler.apply(http3ClientRequest))
+                        .subscribe(new CoreSubscriber<Connection>() {
+                            @Override
+                            public void onSubscribe(Subscription s) {
+                                s.request(Long.MAX_VALUE);
+                            }
+
+                            @Override
+                            public void onNext(Connection unused) {
+                                sink.success(unused);
+                            }
+
+                            @Override
+                            public void onError(Throwable t) {
+                                sink.error(t);
+                            }
+
+                            @Override
+                            public void onComplete() {
+
+                            }
+                        });
+            }
+
         }
 
     }

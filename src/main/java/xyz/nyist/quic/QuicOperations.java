@@ -147,7 +147,7 @@ final class QuicOperations implements ChannelOperationsId, QuicConnection {
     }
 
     @Override
-    public Mono<Void> createStream(QuicStreamType streamType, BiFunction<? super Http3ClientRequest, ? super Http3ClientResponse, ? extends Publisher<Void>> streamHandler) {
+    public Mono<Connection> createStream(QuicStreamType streamType, BiFunction<? super Http3ClientRequest, ? super Http3ClientResponse, ? extends Publisher<Void>> streamHandler) {
         return null;
     }
 

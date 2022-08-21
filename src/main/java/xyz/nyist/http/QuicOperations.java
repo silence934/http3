@@ -118,7 +118,7 @@ public final class QuicOperations implements ChannelOperationsId, QuicConnection
     }
 
     @Override
-    public Mono<Void> createStream(
+    public Mono<Connection> createStream(
             QuicStreamType streamType,
             BiFunction<? super Http3ClientRequest, ? super Http3ClientResponse, ? extends Publisher<Void>> streamHandler) {
         Objects.requireNonNull(streamType, "streamType");
@@ -151,12 +151,12 @@ public final class QuicOperations implements ChannelOperationsId, QuicConnection
 
         final Context currentContext;
 
-        final MonoSink<Void> sink;
+        final MonoSink<Connection> sink;
 
         final BiFunction<? super Http3ClientRequest, ? super Http3ClientResponse, ? extends Publisher<Void>> streamHandler;
 
         QuicStreamChannelObserver(
-                MonoSink<Void> sink,
+                MonoSink<Connection> sink,
                 BiFunction<? super Http3ClientRequest, ? super Http3ClientResponse, ? extends Publisher<Void>> streamHandler) {
             this.currentContext = Context.of(sink.contextView());
             this.sink = sink;
@@ -179,13 +179,13 @@ public final class QuicOperations implements ChannelOperationsId, QuicConnection
                     Http3ClientOperations ops = (Http3ClientOperations) connection;
                     Mono.fromDirect(streamHandler.apply(ops, ops))
                             .subscribe(ops.disposeSubscriber());
+                    sink.success(ops);
                 } catch (Throwable t) {
                     log.error(format(connection.channel(), ""), t);
 
                     //"FutureReturnValueIgnored" this is deliberate
                     connection.channel().close();
                 }
-                sink.success();
             }
         }
 

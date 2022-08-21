@@ -500,6 +500,8 @@ public abstract class Http3TransportConfig<CONF extends TransportConfig> extends
                 ch.pipeline().addLast(loggingHandler);
             }
             if (inbound) {
+                //Http3ServerOperations 可以在收到http3HeadersFrame后再创建
+
                 //Http3InboundStreamTrafficHandler 需要在 ChannelOperationsHandler 之后添加
                 //因为Http3InboundStreamTrafficHandler的handlerAdded触发ctx.read()之后
                 //才开始读取数据，这样才能触发 ChannelOperationsHandler 的 channelRead()
@@ -507,6 +509,9 @@ public abstract class Http3TransportConfig<CONF extends TransportConfig> extends
                 ch.pipeline().addBefore(NettyPipeline.ReactiveBridge,
                                         NettyPipeline.HttpTrafficHandler, new Http3InboundStreamTrafficHandler(streamListener));
             } else {
+                //Http3ClientOperations 必须在quicStreamChannel  Active的时候就创建
+                //因为需要使用它发送消息
+
                 ch.pipeline().addLast(new Http3RequestStreamInitializer() {
                     @Override
                     protected void initRequestStream(QuicStreamChannel ch) {
