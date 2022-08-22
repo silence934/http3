@@ -16,12 +16,16 @@
 package xyz.nyist.http.temp;
 
 import io.netty.channel.Channel;
+import io.netty.incubator.codec.quic.QuicChannel;
 import io.netty.incubator.codec.quic.QuicStreamChannel;
+import lombok.extern.slf4j.Slf4j;
 import reactor.util.annotation.Nullable;
 import xyz.nyist.core.Http3HeadersFrame;
 import xyz.nyist.http.ConnectionChangeHandler;
 
+import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.util.function.BiFunction;
 
 import static java.util.Objects.requireNonNull;
@@ -40,7 +44,22 @@ import static java.util.Objects.requireNonNull;
  * @see <a href="https://tools.ietf.org/html/rfc7239">rfc7239</a>
  * @since 0.8
  */
+@Slf4j
 public final class ConnectionInfo {
+
+
+    static Field remoteField;
+
+    static {
+        //todo 无法拿到这个属性
+        try {
+            remoteField = Class.forName("io.netty.incubator.codec.quic.QuicheQuicChannel")
+                    .getDeclaredField("remote");
+            remoteField.setAccessible(true);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     final InetSocketAddress hostAddress;
 
@@ -86,7 +105,16 @@ public final class ConnectionInfo {
         ConnectionChangeHandler handler = c.parent().pipeline().get(ConnectionChangeHandler.class);
         InetSocketAddress remoteAddress = null;
         if (handler != null) {
-            remoteAddress = (InetSocketAddress) handler.getConnection().newAddress();
+            remoteAddress = (InetSocketAddress) handler.getRemoteAddress();
+        }
+        if (remoteAddress == null) {
+            try {
+                QuicChannel quicChannel = (QuicChannel) c.parent();
+                SocketAddress socketAddress = quicChannel.remoteAddress();
+                remoteAddress = (InetSocketAddress) remoteField.get(quicChannel);
+            } catch (Exception e) {
+                log.error("get remoteAddress failed : {}", e.toString());
+            }
         }
 
         return new ConnectionInfo((InetSocketAddress) parent.localAddress(), remoteAddress, "https");

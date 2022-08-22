@@ -1,6 +1,9 @@
 package xyz.nyist.http.client;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.cookie.Cookie;
+import org.reactivestreams.Publisher;
 import reactor.netty.http.client.HttpClient;
 import xyz.nyist.core.Http3Headers;
 
@@ -72,5 +75,14 @@ public interface Http3ClientRequest extends Http3ClientInfos {
      * @since 0.9.11
      */
     Http3ClientRequest responseTimeout(Duration maxReadOperationInterval);
+
+
+    Http3ClientRequest method(HttpMethod method);
+
+
+    Http3ClientRequest uri(String uri);
+
+
+    Publisher<Void> send(Publisher<? extends ByteBuf> dataStream);
 
 }

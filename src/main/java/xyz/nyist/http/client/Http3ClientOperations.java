@@ -5,10 +5,7 @@ import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.CompositeByteBuf;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.http.HttpHeaderNames;
-import io.netty.handler.codec.http.HttpHeaders;
-import io.netty.handler.codec.http.HttpMethod;
-import io.netty.handler.codec.http.HttpVersion;
+import io.netty.handler.codec.http.*;
 import io.netty.handler.codec.http.cookie.ClientCookieDecoder;
 import io.netty.handler.codec.http.cookie.ClientCookieEncoder;
 import io.netty.handler.codec.http.cookie.Cookie;
@@ -63,6 +60,7 @@ public class Http3ClientOperations extends Http3Operations<NettyInbound, NettyOu
     @SuppressWarnings({"unchecked"})
     static final Supplier<String>[] EMPTY_REDIRECTIONS = (Supplier<String>[]) new Supplier[0];
 
+    final static String DEFAULT_URI = "/";
 
     final Http3HeadersFrame nettyRequest;
 
@@ -106,16 +104,18 @@ public class Http3ClientOperations extends Http3Operations<NettyInbound, NettyOu
         this.nettyRequest = new DefaultHttp3HeadersFrame();
         this.requestHeaders = nettyRequest.headers();
         this.connectionInfo = connectionInfo;
+        InetSocketAddress remoteAddress = connectionInfo.getRemoteAddress();
         this.requestHeaders.method(HttpMethod.GET.asciiName())
-                .authority("www.nyist.xyz:443")
-                .path("/api")
-                .scheme("https");
+                .authority(remoteAddress.getHostName() + ":" + remoteAddress.getPort())
+                .path(DEFAULT_URI)
+                .scheme(HttpScheme.HTTPS.name());
 
 
         this.cookieEncoder = ClientCookieEncoder.STRICT;
         this.cookieDecoder = ClientCookieDecoder.STRICT;
         this.trailerHeaders = Sinks.unsafe().one();
     }
+
 
     @Override
     public Http3ClientRequest addCookie(Cookie cookie) {
@@ -268,6 +268,12 @@ public class Http3ClientOperations extends Http3Operations<NettyInbound, NettyOu
     }
 
     @Override
+    public Http3ClientOperations method(HttpMethod method) {
+        requestHeaders.method(Objects.requireNonNull(method, "method").asciiName());
+        return this;
+    }
+
+    @Override
     public CharSequence status() {
         Http3ClientOperations.ResponseState responseState = this.responseState;
         if (responseState != null) {
@@ -283,6 +289,12 @@ public class Http3ClientOperations extends Http3Operations<NettyInbound, NettyOu
             return requestHeaders.path().toString();
         }
         throw new IllegalStateException("request not parsed");
+    }
+
+    @Override
+    public final Http3ClientOperations uri(String uri) {
+        requestHeaders.path(Objects.requireNonNull(uri, "uri"));
+        return this;
     }
 
 

@@ -65,6 +65,16 @@ public class Http3ClientConnect extends Http3Client {
         return super.connect();
     }
 
+
+    @Override
+    public Mono<Void> execute() {
+        Http3ClientConfig config = configuration();
+        Objects.requireNonNull(config.sendHandler, "sendHandler");
+        Objects.requireNonNull(config.responseHandler, "responseHandler");
+        return super.execute();
+    }
+
+
     @Override
     protected Http3Client duplicate() {
         return new Http3ClientConnect(new Http3ClientConfig(config));

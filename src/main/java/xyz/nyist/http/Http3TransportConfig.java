@@ -171,7 +171,7 @@ public abstract class Http3TransportConfig<CONF extends TransportConfig> extends
         return TransportConfig.updateMap(parentMap, key, value);
     }
 
-    protected static ChannelInitializer<QuicStreamChannel> streamChannelInitializer(
+    public static ChannelInitializer<QuicStreamChannel> streamChannelInitializer(
             @Nullable ChannelHandler loggingHandler, ConnectionObserver streamListener, boolean inbound) {
         return new QuicStreamChannelInitializer(loggingHandler, streamListener, inbound);
     }
@@ -407,7 +407,7 @@ public abstract class Http3TransportConfig<CONF extends TransportConfig> extends
             if (log.isDebugEnabled()) {
                 log.debug(format(channel, "Created a new QUIC channel."));
             }
-
+            channel.pipeline().addLast(new ConnectionChangeHandler());
             channel.pipeline().remove(NettyPipeline.ReactiveBridge);
             channel.pipeline().addLast(NettyPipeline.ReactiveBridge,
                                        new QuicChannelInboundHandler(observer, loggingHandler, streamAttrs, streamObserver, streamOptions));
@@ -511,14 +511,9 @@ public abstract class Http3TransportConfig<CONF extends TransportConfig> extends
             } else {
                 //Http3ClientOperations 必须在quicStreamChannel  Active的时候就创建
                 //因为需要使用它发送消息
-
                 ch.pipeline().addLast(new Http3RequestStreamInitializer() {
                     @Override
-                    protected void initRequestStream(QuicStreamChannel ch) {
-//                        ch.pipeline()
-//                                .addLast(new Http3FrameToHttpObjectCodec(false))
-//                                .addLast(new HttpObjectAggregator(512 * 1024));
-                    }
+                    protected void initRequestStream(QuicStreamChannel ch) {}
                 });
                 ch.pipeline().addLast(NettyPipeline.HttpTrafficHandler, new Http3OutboundStreamTrafficHandler());
                 ChannelOperations.addReactiveBridge(ch, (conn, observer, msg) -> new Http3ClientOperations(conn, observer, ConnectionInfo.from(ch)), streamListener);
