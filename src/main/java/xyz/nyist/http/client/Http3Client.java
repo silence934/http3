@@ -46,12 +46,12 @@ import static reactor.netty.ReactorNetty.format;
 public abstract class Http3Client extends Http3Transport<Http3Client, Http3ClientConfig> {
 
     public static Http3Client create() {
-        return Http3ClientConnect.INSTANCE.initialSettings(spec -> spec.maxData(1000000000)
-                .maxStreamDataBidirectionalLocal(100000000)
-                .maxStreamDataBidirectionalRemote(100000000)
-                .maxStreamDataUnidirectional(100000000)
-                .maxStreamsBidirectional(100000)
-                .maxStreamsUnidirectional(10000000)
+        return Http3ClientConnect.INSTANCE.initialSettings(spec -> spec.maxData(1024 * 1024)
+                .maxStreamDataBidirectionalLocal(1024 * 1024)
+                .maxStreamDataBidirectionalRemote(1024 * 1024)
+                .maxStreamDataUnidirectional(1024)
+                .maxStreamsBidirectional(100)
+                .maxStreamsUnidirectional(10)
         ).idleTimeout(Duration.ofSeconds(15));
     }
 
