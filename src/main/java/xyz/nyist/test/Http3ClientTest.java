@@ -26,7 +26,7 @@ public class Http3ClientTest {
         //https://www.cloudflare.com/favicon.ico
         //https://quic.tech:8443/quic.ico
         Http3Client.create()
-                .remoteAddress(() -> new InetSocketAddress("quic.tech", 8443))
+                .remoteAddress(() -> new InetSocketAddress("www.cloudflare.com", 8443))
                 .secure(context)
                 .sendHandler(http3ClientRequest -> {
                     //Host: www.cloudflare.com
@@ -35,7 +35,7 @@ public class Http3ClientTest {
                     return http3ClientRequest.addHeader("host", "www.cloudflare.com")
                             .addHeader("user-agent", "curl/7.85.0-DEV")
                             .addHeader("accept", "*/*")
-                            .uri("/").send(Mono.empty());
+                            .uri("/favicon.ico").send(Mono.empty());
                 })
                 .response(http3ClientResponse -> {
                     Http3ClientOperations operations = (Http3ClientOperations) http3ClientResponse;
