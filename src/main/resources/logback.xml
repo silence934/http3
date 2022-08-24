@@ -16,6 +16,7 @@
 
     <logger name="io.netty.handler.logging.LoggingHandler" level="trace"/>
     <logger name="com.example.springboot.test.QuicServerTest" level="debug"/>
+    <logger name="reactor.netty.transport.TransportConfig" level="debug"/>
     <logger name="xyz.nyist.http" level="debug"/>
     <logger name="xyz.nyist.core" level="debug"/>
 

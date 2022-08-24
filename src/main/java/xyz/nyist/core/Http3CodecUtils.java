@@ -192,6 +192,8 @@ final class Http3CodecUtils {
      * <p>
      * See <a href="https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-16">
      * Variable-Length Integer Encoding </a>
+     * <p>
+     * & 0x3fff 是为了去掉前两位
      */
     static long readVariableLengthInteger(ByteBuf in, int len) {
         switch (len) {

@@ -21,7 +21,6 @@ import reactor.netty.transport.AddressUtils;
 import reactor.netty.transport.TransportConnector;
 import reactor.util.context.Context;
 import xyz.nyist.http.Http3Transport;
-import xyz.nyist.http.Http3TransportConfig;
 import xyz.nyist.quic.QuicConnection;
 
 import java.io.IOException;
@@ -47,11 +46,13 @@ import static reactor.netty.ReactorNetty.format;
 public abstract class Http3Client extends Http3Transport<Http3Client, Http3ClientConfig> {
 
     public static Http3Client create() {
-        return Http3ClientConnect.INSTANCE.initialSettings(spec -> spec.maxData(10000000)
-                .maxStreamDataBidirectionalLocal(1000000)
-                .maxStreamDataUnidirectional(3)
-                .maxStreamsUnidirectional(1024)
-        ).idleTimeout(Duration.ofSeconds(5));
+        return Http3ClientConnect.INSTANCE.initialSettings(spec -> spec.maxData(1000000000)
+                .maxStreamDataBidirectionalLocal(100000000)
+                .maxStreamDataBidirectionalRemote(100000000)
+                .maxStreamDataUnidirectional(100000000)
+                .maxStreamsBidirectional(100000)
+                .maxStreamsUnidirectional(10000000)
+        ).idleTimeout(Duration.ofSeconds(15));
     }
 
     /**
@@ -331,8 +332,9 @@ public abstract class Http3Client extends Http3Transport<Http3Client, Http3Clien
                     QuicChannel.newBootstrap(channel)
                             .remoteAddress(remote)
                             .handler(quicChannelInitializer)
-                            .streamHandler(
-                                    Http3TransportConfig.streamChannelInitializer(loggingHandler, streamObserver, true));
+//                            .streamHandler(
+//                                    Http3TransportConfig.streamChannelInitializer(loggingHandler, streamObserver, true))
+                    ;
 
             bootstrap.connect()
                     .addListener(f -> {

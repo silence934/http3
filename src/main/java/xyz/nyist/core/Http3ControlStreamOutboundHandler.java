@@ -79,10 +79,10 @@ final class Http3ControlStreamOutboundHandler
             log.warn("local settings send failed,clos channel:{}", future.channel());
             future.channel().close();
         } else {
-            future.addListener((ChannelFutureListener) future1 -> {
-                if (!future1.isSuccess()) {
+            future.addListener((ChannelFutureListener) f -> {
+                if (!f.isSuccess()) {
                     log.warn("local settings send failed,clos channel:{}", future.channel());
-                    future1.channel().close();
+                    f.channel().close();
                 } else {
                     log.debug("local settings send succeed");
                 }

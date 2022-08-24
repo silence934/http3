@@ -176,6 +176,11 @@ public abstract class Http3ConnectionHandler extends ChannelInboundHandlerAdapte
             }
             switch (channel.type()) {
                 case BIDIRECTIONAL:
+                    //todo HTTP/3 does not use server-initiated bidirectional streams, though an extension
+                    // could define a use for these streams. Clients MUST treat receipt of a server-initiated
+                    // bidirectional stream as a connection error of type H3_STREAM_CREATION_ERROR (Section 8)
+                    // unless such an extension has been negotiated.
+                    // https://www.ietf.org/archive/id/draft-ietf-quic-http-34.html#section-6.1-3
                     initBidirectionalStream(ctx, channel);
                     break;
                 case UNIDIRECTIONAL:

@@ -23,11 +23,19 @@ public class Http3ClientTest {
                 .trustManager(InsecureTrustManagerFactory.INSTANCE)
                 .applicationProtocols(Http3.supportedApplicationProtocols()).build();
         //curl 'https://quic.cloud/wp-includes/js/wp-emoji-release.min.js?ver=6.0.1' -I --http3
+        //https://www.cloudflare.com/favicon.ico
+        //https://quic.tech:8443/quic.ico
         Http3Client.create()
-                .remoteAddress(() -> new InetSocketAddress("www.nyist.xyz", 443))
+                .remoteAddress(() -> new InetSocketAddress("quic.tech", 8443))
                 .secure(context)
                 .sendHandler(http3ClientRequest -> {
-                    return http3ClientRequest.uri("/api").send(Mono.empty());
+                    //Host: www.cloudflare.com
+                    //> user-agent: curl/7.85.0-DEV
+                    //> accept: */*
+                    return http3ClientRequest.addHeader("host", "www.cloudflare.com")
+                            .addHeader("user-agent", "curl/7.85.0-DEV")
+                            .addHeader("accept", "*/*")
+                            .uri("/").send(Mono.empty());
                 })
                 .response(http3ClientResponse -> {
                     Http3ClientOperations operations = (Http3ClientOperations) http3ClientResponse;

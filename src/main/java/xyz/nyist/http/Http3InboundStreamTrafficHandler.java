@@ -61,7 +61,7 @@ public final class Http3InboundStreamTrafficHandler extends ChannelInboundHandle
         super.handlerAdded(ctx);
         this.ctx = ctx;
         if (log.isDebugEnabled()) {
-            log.debug(format(ctx.channel(), "New http connection, requesting read"));
+            log.debug(format(ctx.channel(), "New stream connection, requesting read"));
         }
         ctx.read();
     }

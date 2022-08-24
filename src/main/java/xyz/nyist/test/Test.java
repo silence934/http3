@@ -1,9 +1,6 @@
 package xyz.nyist.test;
 
-import reactor.core.publisher.Mono;
 import xyz.nyist.core.Http3Exception;
-
-import java.util.function.Consumer;
 
 /**
  * @author: fucong
@@ -13,12 +10,20 @@ import java.util.function.Consumer;
 public class Test {
 
     public static void main(String[] args) throws Http3Exception {
-        Mono.just("123").subscribe(new Consumer<String>() {
-            @Override
-            public void accept(String s) {
-                System.out.println(s);
-            }
-        });
+        long a = 2879572594025284834L;
+        System.out.println(0x21);
+        System.out.println(2879572594025284834L & 0x21);
+        System.out.println(Long.toBinaryString(512520635826812275L));
+
+
+        System.out.println(Integer.toBinaryString(0x21));
+        System.out.println(Integer.toBinaryString(0x1f));
+        System.out.println(Integer.toBinaryString(0x1f * 3));
+        System.out.println(Integer.toBinaryString(0x1f * 4));
+        System.out.println(Integer.toBinaryString(0x1f * 5));
+
+        System.out.println(512520635826812275L - 33);
+        System.out.println(16532923736348782L * 31);
     }
 
 }
