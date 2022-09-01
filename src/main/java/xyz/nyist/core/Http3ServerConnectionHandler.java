@@ -39,8 +39,8 @@ public final class Http3ServerConnectionHandler extends Http3ConnectionHandler {
      * @param requestStreamHandler the {@link ChannelHandler} that is used for each new request stream.
      *                             This handler will receive {@link Http3HeadersFrame} and {@link Http3DataFrame}s.
      */
-    public Http3ServerConnectionHandler(ChannelHandler requestStreamHandler) {
-        this(requestStreamHandler, null, null, null, false);
+    public Http3ServerConnectionHandler(ChannelHandler requestStreamHandler, boolean disableQpackDynamicTable) {
+        this(requestStreamHandler, null, null, null, disableQpackDynamicTable);
     }
 
     /**

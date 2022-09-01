@@ -25,10 +25,10 @@ import xyz.nyist.core.DefaultHttp3HeadersFrame;
 import xyz.nyist.core.Http3Headers;
 import xyz.nyist.core.Http3HeadersFrame;
 import xyz.nyist.core.Http3Util;
+import xyz.nyist.http.ConnectionInfo;
 import xyz.nyist.http.Cookies;
 import xyz.nyist.http.Http3Operations;
 import xyz.nyist.http.Http3Version;
-import xyz.nyist.http.temp.ConnectionInfo;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -441,11 +441,10 @@ public class Http3ClientOperations extends Http3Operations<NettyInbound, NettyOu
                         "zero-length header"));
             }
             //"FutureReturnValueIgnored" this is deliberate
-            writeMessage(EMPTY_BUFFER);
-            //channel().writeAndFlush(newFullBodyMessage(Unpooled.EMPTY_BUFFER));
+            writeMessage(EMPTY_BUFFER).addListener(f -> shutdownOutput());
         } else if (markSentBody()) {
             //"FutureReturnValueIgnored" this is deliberate
-            // channel().writeAndFlush(LastHttpContent.EMPTY_LAST_CONTENT);
+            shutdownOutput();
         }
         listener().onStateChange(this, HttpClientState.REQUEST_SENT);
         if (responseTimeout != null) {

@@ -49,9 +49,9 @@ public abstract class Http3Client extends Http3Transport<Http3Client, Http3Clien
         return Http3ClientConnect.INSTANCE.initialSettings(spec -> spec.maxData(1024 * 1024)
                 .maxStreamDataBidirectionalLocal(1024 * 1024)
                 .maxStreamDataBidirectionalRemote(1024 * 1024)
-                .maxStreamDataUnidirectional(1024)
-                .maxStreamsBidirectional(100)
-                .maxStreamsUnidirectional(10)
+                .maxStreamDataUnidirectional(10240)
+                .maxStreamsBidirectional(1000)
+                .maxStreamsUnidirectional(100)
         ).idleTimeout(Duration.ofSeconds(15));
     }
 
@@ -250,13 +250,13 @@ public abstract class Http3Client extends Http3Transport<Http3Client, Http3Clien
         Mono<? extends Connection> mono = connect();
         Http3ClientConfig config = configuration();
         return mono
-                .flatMap(c -> {
-                    QuicConnection quicConnection = (QuicConnection) Connection.from(c.channel());
-                    return quicConnection.createStream((http3ClientRequest, http3ClientResponse)
-                                                               -> config.sendHandler.apply(http3ClientRequest));
+                .flatMap(quicConnection -> {
+                    QuicConnection connection = (QuicConnection) Connection.from(quicConnection.channel());
+                    return connection.createStream((http3ClientRequest, http3ClientResponse)
+                                                           -> config.sendHandler.apply(http3ClientRequest));
                 })
-                .flatMap(c -> {
-                    Http3ClientOperations operations = (Http3ClientOperations) Connection.from(c.channel());
+                .flatMap(streamConnection -> {
+                    Http3ClientOperations operations = (Http3ClientOperations) Connection.from(streamConnection.channel());
                     return Mono.from(config.responseHandler.apply(operations));
                 });
     }

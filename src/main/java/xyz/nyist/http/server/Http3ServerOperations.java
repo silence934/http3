@@ -1,7 +1,6 @@
 package xyz.nyist.http.server;
 
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.DefaultHeaders;
@@ -27,11 +26,7 @@ import reactor.netty.http.websocket.WebsocketOutbound;
 import reactor.util.annotation.Nullable;
 import reactor.util.context.Context;
 import xyz.nyist.core.*;
-import xyz.nyist.http.Http3Operations;
-import xyz.nyist.http.Http3ServerFormDecoderProvider;
-import xyz.nyist.http.Http3Version;
-import xyz.nyist.http.ServerCookies;
-import xyz.nyist.http.temp.ConnectionInfo;
+import xyz.nyist.http.*;
 
 import java.net.InetSocketAddress;
 import java.util.*;
@@ -511,65 +506,31 @@ public class Http3ServerOperations extends Http3Operations<Http3ServerRequest, H
             return;
         }
 
-        final ChannelFuture f;
         if (log.isDebugEnabled()) {
             log.debug(format(channel(), "Last HTTP response frame"));
         }
         if (markSentHeaderAndBody()) {
             if (log.isDebugEnabled()) {
-                log.debug(format(channel(), "No sendHeaders() called before complete, sending " +
-                        "zero-length header"));
+                log.debug(format(channel(), "No sendHeaders() called before complete, sending zero-length header"));
             }
 
-            f = writeMessage(EMPTY_BUFFER);
-        } else if (markSentBody()) {
-            // https://datatracker.ietf.org/doc/html/rfc7230#section-4.1.2
-            // A trailer allows the sender to include additional fields at the end
-            // of a chunked message in order to supply metadata that might be
-            // dynamically generated while the message body is sent, such as a
-            // message integrity check, digital signature, or post-processing
-            // status.
-            //todo 分片发送 暂时还未实现 不做处理
-            //if (trailerHeadersConsumer != null && isTransferEncodingChunked(nettyResponse)) {
-            if (false) {
-                // https://datatracker.ietf.org/doc/html/rfc7230#section-4.4
-                // When a message includes a message body encoded with the chunked
-                // transfer coding and the sender desires to send metadata in the form
-                // of trailer fields at the end of the message, the sender SHOULD
-                // generate a Trailer header field before the message body to indicate
-                // which fields will be present in the trailers.
-                if (responseHeaders.get(HttpHeaderNames.TRAILER) != null) {
-                    String declaredHeaderNames = responseHeaders.get(HttpHeaderNames.TRAILER).toString();
-                    HttpHeaders trailerHeaders = new Http3ServerOperations.TrailerHeaders(declaredHeaderNames);
-                    try {
-                        trailerHeadersConsumer.accept(trailerHeaders);
-                    } catch (IllegalArgumentException e) {
-                        // A sender MUST NOT generate a trailer when header names are
-                        // Http3ServerOperations.TrailerHeaders.DISALLOWED_TRAILER_HEADER_NAMES
-                        log.error(format(channel(), "Cannot apply trailer headers [{0}]"), declaredHeaderNames, e);
-                    }
-                    if (!trailerHeaders.isEmpty()) {
-                        LastHttpContent lastHttpContent = LastHttpContent.EMPTY_LAST_CONTENT;
-                        lastHttpContent = new DefaultLastHttpContent();
-                        lastHttpContent.trailingHeaders().set(trailerHeaders);
-                    }
+            writeMessage(EMPTY_BUFFER).addListener(s -> {
+                discard();
+                if (!s.isSuccess() && log.isDebugEnabled()) {
+                    log.debug(format(channel(), "Failed flushing last frame"), s.cause());
                 }
-            }
-            f = ((QuicStreamChannel) channel()).shutdownOutput();
+                if (channel().isActive()) {
+                    shutdownOutput();
+                }
+            });
+
+        } else if (markSentBody()) {
+            shutdownOutput();
         } else {
             discard();
-            ((QuicStreamChannel) channel()).shutdownOutput();
-            return;
+            shutdownOutput();
         }
-        f.addListener(s -> {
-            discard();
-            if (!s.isSuccess() && log.isDebugEnabled()) {
-                log.debug(format(channel(), "Failed flushing last frame"), s.cause());
-            }
-            if (channel().isActive()) {
-                ((QuicStreamChannel) channel()).shutdownOutput();
-            }
-        });
+
 
     }
 

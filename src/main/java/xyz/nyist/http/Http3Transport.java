@@ -198,6 +198,16 @@ public abstract class Http3Transport<T extends Transport<T, CONF>, CONF extends 
         return dup;
     }
 
+    public final T disableQpackDynamicTable(boolean disableQpackDynamicTable) {
+        if (disableQpackDynamicTable == configuration().disableQpackDynamicTable) {
+            @SuppressWarnings("unchecked")
+            T dup = (T) this;
+            return dup;
+        }
+        T dup = duplicate();
+        dup.configuration().disableQpackDynamicTable = disableQpackDynamicTable;
+        return dup;
+    }
 
     /**
      * Enable/disable Hystart.

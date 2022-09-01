@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package xyz.nyist.http.temp;
+package xyz.nyist.http;
 
 import io.netty.channel.Channel;
 import io.netty.incubator.codec.quic.QuicChannel;
@@ -21,11 +21,9 @@ import io.netty.incubator.codec.quic.QuicStreamChannel;
 import lombok.extern.slf4j.Slf4j;
 import reactor.util.annotation.Nullable;
 import xyz.nyist.core.Http3HeadersFrame;
-import xyz.nyist.http.ConnectionChangeHandler;
 
 import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
-import java.net.SocketAddress;
 import java.util.function.BiFunction;
 
 import static java.util.Objects.requireNonNull;
@@ -110,7 +108,6 @@ public final class ConnectionInfo {
         if (remoteAddress == null) {
             try {
                 QuicChannel quicChannel = (QuicChannel) c.parent();
-                SocketAddress socketAddress = quicChannel.remoteAddress();
                 remoteAddress = (InetSocketAddress) remoteField.get(quicChannel);
             } catch (Exception e) {
                 log.error("get remoteAddress failed : {}", e.toString());

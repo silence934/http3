@@ -37,7 +37,6 @@ import xyz.nyist.core.Http3RequestStreamInitializer;
 import xyz.nyist.http.client.Http3ClientOperations;
 import xyz.nyist.http.server.Http3ServerRequest;
 import xyz.nyist.http.server.Http3ServerResponse;
-import xyz.nyist.http.temp.ConnectionInfo;
 import xyz.nyist.quic.QuicInitialSettingsSpec;
 import xyz.nyist.quic.QuicResources;
 
@@ -96,6 +95,8 @@ public abstract class Http3TransportConfig<CONF extends TransportConfig> extends
     protected boolean grease;
 
     protected boolean hystart;
+
+    protected boolean disableQpackDynamicTable;
 
     protected Duration idleTimeout;
 
@@ -165,6 +166,7 @@ public abstract class Http3TransportConfig<CONF extends TransportConfig> extends
         this.streamObserver = parent.streamObserver;
         this.streamOptions = parent.streamOptions;
         this.initialSettings = parent.initialSettings;
+        this.disableQpackDynamicTable = parent.disableQpackDynamicTable;
     }
 
     protected static <K, V> Map<K, V> updateMap(Map<K, V> parentMap, Object key, @Nullable Object value) {
@@ -338,6 +340,12 @@ public abstract class Http3TransportConfig<CONF extends TransportConfig> extends
     public final ConnectionObserver streamObserver() {
         return streamObserver;
     }
+
+
+    public final boolean disableQpackDynamicTable() {
+        return disableQpackDynamicTable;
+    }
+
 
     /**
      * Return the read-only {@link ChannelOption} map for each stream.

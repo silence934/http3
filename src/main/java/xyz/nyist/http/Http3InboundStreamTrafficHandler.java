@@ -25,7 +25,6 @@ import reactor.netty.channel.ChannelOperations;
 import xyz.nyist.core.Http3Exception;
 import xyz.nyist.core.Http3HeadersFrame;
 import xyz.nyist.http.server.Http3ServerOperations;
-import xyz.nyist.http.temp.ConnectionInfo;
 
 import java.net.SocketAddress;
 import java.util.Queue;

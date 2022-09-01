@@ -361,6 +361,11 @@ public abstract class Http3Operations<INBOUND extends NettyInbound, OUTBOUND ext
         return CombinationChannelFuture.create(writeHeads, writeBody);
     }
 
+    @SuppressWarnings("all")
+    protected ChannelFuture shutdownOutput() {
+        return ((QuicStreamChannel) channel()).shutdownOutput();
+    }
+
     @Override
     @SuppressWarnings("deprecation")
     public Http3Operations<INBOUND, OUTBOUND> addHandler(String name, ChannelHandler handler) {

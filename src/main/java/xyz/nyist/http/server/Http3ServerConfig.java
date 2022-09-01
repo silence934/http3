@@ -359,9 +359,12 @@ public final class Http3ServerConfig extends Http3TransportConfig<Http3ServerCon
 
         final LoggingHandler loggingHandler;
 
+        final boolean disableQpackDynamicTable;
+
 
         QuicChannelObserver(Http3ServerConfig config, ConnectionObserver childObs) {
             this.childObs = childObs;
+            disableQpackDynamicTable = config.disableQpackDynamicTable();
             this.loggingHandler = config.loggingHandler();
             this.streamObserver = config.streamObserver();
         }
@@ -370,7 +373,8 @@ public final class Http3ServerConfig extends Http3TransportConfig<Http3ServerCon
         public void onStateChange(Connection connection, State newState) {
             if (newState == CONNECTED) {
                 Http3ServerConnectionHandler http3ServerConnectionHandler = new Http3ServerConnectionHandler(
-                        Http3TransportConfig.streamChannelInitializer(loggingHandler, streamObserver, true)
+                        Http3TransportConfig.streamChannelInitializer(loggingHandler, streamObserver, true),
+                        disableQpackDynamicTable
                 );
                 connection.channel().pipeline()
                         .addBefore(NettyPipeline.ReactiveBridge, "http3ServerConnectionHandler", http3ServerConnectionHandler);
