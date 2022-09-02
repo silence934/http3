@@ -1,5 +1,3 @@
-package xyz.nyist.test;
-
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;

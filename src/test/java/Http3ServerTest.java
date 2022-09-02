@@ -1,5 +1,3 @@
-package xyz.nyist.test;
-
 import io.netty.buffer.Unpooled;
 import io.netty.incubator.codec.quic.InsecureQuicTokenHandler;
 import io.netty.incubator.codec.quic.QuicSslContext;
@@ -23,17 +21,17 @@ import java.time.Duration;
  * @Description:
  */
 @Slf4j
-public class Http3ServerTest3 {
+public class Http3ServerTest {
 
     public static void main(String[] args) throws Exception {
 
-        InputStream inputStream = Http3ServerTest3.class.getClassLoader().getResourceAsStream("www.nyist.xyz.pfx");
+        InputStream inputStream = Http3ServerTest.class.getClassLoader().getResourceAsStream("http3.nyist.xyz.pfx");
         KeyStore keyStore = KeyStore.getInstance("PKCS12");
-        keyStore.load(inputStream, "fc2998820...".toCharArray());
+        keyStore.load(inputStream, "123456".toCharArray());
         KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-        keyManagerFactory.init(keyStore, "fc2998820...".toCharArray());
+        keyManagerFactory.init(keyStore, "123456".toCharArray());
 
-        QuicSslContext serverCtx = QuicSslContextBuilder.forServer(keyManagerFactory, "fc2998820...")
+        QuicSslContext serverCtx = QuicSslContextBuilder.forServer(keyManagerFactory, "123456")
                 .keylog(true)
                 .applicationProtocols(Http3.supportedApplicationProtocols()).build();
 
@@ -49,7 +47,6 @@ public class Http3ServerTest3 {
                                   if ("/api".equals(path)) {
                                       return http3ServerResponse.send(Mono.just(Unpooled.wrappedBuffer("api.toString()".getBytes(CharsetUtil.UTF_8))));
                                   }
-                                  // http3ServerRequest.requestHeaders().add("123", "456");
                                   return http3ServerResponse.send(Mono.empty());
                               }
                 )
