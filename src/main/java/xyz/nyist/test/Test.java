@@ -1,6 +1,7 @@
 package xyz.nyist.test;
 
-import xyz.nyist.core.Http3Exception;
+import java.io.File;
+import java.io.InputStream;
 
 /**
  * @author: fucong
@@ -9,21 +10,12 @@ import xyz.nyist.core.Http3Exception;
  */
 public class Test {
 
-    public static void main(String[] args) throws Http3Exception {
-        long a = 2879572594025284834L;
-        System.out.println(0x21);
-        System.out.println(2879572594025284834L & 0x21);
-        System.out.println(Long.toBinaryString(512520635826812275L));
+    public static void main(String[] args) throws Exception {
+        File file = new File("/Users/fucong/IdeaProjects/netty-incubator-codec-http3/src/test/resources/www.nyist.xyz.pfx");
+        System.out.println(file.length());
+        InputStream inputStream = Test.class.getClassLoader().getResourceAsStream("www.nyist.xyz.pfx");
+        System.out.println(inputStream.available());
 
-
-        System.out.println(Integer.toBinaryString(0x21));
-        System.out.println(Integer.toBinaryString(0x1f));
-        System.out.println(Integer.toBinaryString(0x1f * 3));
-        System.out.println(Integer.toBinaryString(0x1f * 4));
-        System.out.println(Integer.toBinaryString(0x1f * 5));
-
-        System.out.println(512520635826812275L - 33);
-        System.out.println(16532923736348782L * 31);
     }
 
 }

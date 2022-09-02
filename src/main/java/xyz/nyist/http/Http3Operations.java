@@ -27,8 +27,12 @@ import xyz.nyist.core.Http3Headers;
 import xyz.nyist.core.Http3HeadersFrame;
 import xyz.nyist.core.Http3Util;
 
+import java.io.IOException;
 import java.net.URI;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
@@ -264,7 +268,32 @@ public abstract class Http3Operations<INBOUND extends NettyInbound, OUTBOUND ext
             Http3Util.setTransferEncodingChunked(outboundHttpMessage(), true);
         }
 
-        return super.sendFile(file, position, count);
+        //todo zero-copy
+        return sendUsing(() -> FileChannel.open(file, StandardOpenOption.READ),
+                         (c, fc) -> {
+
+
+                             ByteBuffer var6 = ByteBuffer.allocate((int) count);
+                             try {
+                                 fc.read(var6, position);
+                             } catch (IOException e) {
+                                 throw new RuntimeException(e);
+                             }
+                             var6.flip();
+
+                             ByteBuf byteBuf = Unpooled.wrappedBuffer(var6);
+
+                             return new DefaultHttp3DataFrame(byteBuf);
+                         },
+                         fc -> {
+                             try {
+                                 fc.close();
+                             } catch (Throwable e) {
+                                 if (log.isTraceEnabled()) {
+                                     log.trace("", e);
+                                 }
+                             }
+                         });
     }
 
 
