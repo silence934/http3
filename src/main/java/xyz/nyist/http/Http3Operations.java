@@ -271,17 +271,15 @@ public abstract class Http3Operations<INBOUND extends NettyInbound, OUTBOUND ext
         //todo zero-copy
         return sendUsing(() -> FileChannel.open(file, StandardOpenOption.READ),
                          (c, fc) -> {
-
-
-                             ByteBuffer var6 = ByteBuffer.allocate((int) count);
+                             ByteBuffer buffer = ByteBuffer.allocateDirect((int) count);
                              try {
-                                 fc.read(var6, position);
+                                 fc.read(buffer, position);
                              } catch (IOException e) {
                                  throw new RuntimeException(e);
                              }
-                             var6.flip();
+                             buffer.flip();
 
-                             ByteBuf byteBuf = Unpooled.wrappedBuffer(var6);
+                             ByteBuf byteBuf = Unpooled.wrappedBuffer(buffer);
 
                              return new DefaultHttp3DataFrame(byteBuf);
                          },

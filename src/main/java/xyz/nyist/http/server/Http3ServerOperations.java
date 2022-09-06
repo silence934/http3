@@ -106,7 +106,7 @@ public class Http3ServerOperations extends Http3Operations<Http3ServerRequest, H
             this.path = null;
         }
         this.responseHeaders = responseHeadsFrame.headers();
-        this.responseHeaders.set(HttpHeaderNames.TRANSFER_ENCODING, HttpHeaderValues.CHUNKED);
+        // this.responseHeaders.set(HttpHeaderNames.TRANSFER_ENCODING, HttpHeaderValues.CHUNKED);
         this.responseHeaders.status(HttpResponseStatus.OK.codeAsText());
     }
 

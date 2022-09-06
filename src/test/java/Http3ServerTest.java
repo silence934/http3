@@ -10,6 +10,7 @@ import xyz.nyist.http.server.Http3Server;
 import xyz.nyist.http.server.Http3ServerOperations;
 
 import javax.net.ssl.KeyManagerFactory;
+import java.io.File;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.security.KeyStore;
@@ -36,16 +37,26 @@ public class Http3ServerTest {
                 .applicationProtocols(Http3.supportedApplicationProtocols()).build();
 
 
+        File file = new File(Http3ServerTest.class.getClassLoader().getResource("logback.xml").getPath());
+
         Http3Server.create()
                 .disableQpackDynamicTable(true)
+//                .option(QuicChannelOption.SEGMENTED_DATAGRAM_PACKET_ALLOCATOR, new SegmentedDatagramPacketAllocator() {
+//                    @Override
+//                    public DatagramPacket newPacket(ByteBuf buffer, int segmentSize, InetSocketAddress remoteAddress) {
+//                        return new io.netty.channel.unix.SegmentedDatagramPacket(buffer, segmentSize, remoteAddress);
+//                    }
+//                })
                 .tokenHandler(InsecureQuicTokenHandler.INSTANCE)
                 .handleStream((http3ServerRequest, http3ServerResponse) -> {
                                   Http3ServerOperations operations = ((Http3ServerOperations) http3ServerResponse);
                                   operations.outboundHttpMessage().add("content-type", "text/plain");
-                                  operations.outboundHttpMessage().add("content-length", 14);
+                                  //operations.outboundHttpMessage().add("content-length", 14);
                                   String path = http3ServerRequest.fullPath();
                                   if ("/api".equals(path)) {
                                       return http3ServerResponse.send(Mono.just(Unpooled.wrappedBuffer("api.toString()".getBytes(CharsetUtil.UTF_8))));
+                                  } else if ("/file".equals(path)) {
+                                      return http3ServerResponse.sendFile(file.toPath());
                                   }
                                   return http3ServerResponse.send(Mono.empty());
                               }
