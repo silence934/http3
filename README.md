@@ -59,3 +59,7 @@ apt install cmake autoconf libtool golang cargo -y
 ```
 
 安装位置在 /root/curl/bin
+
+## 在spring boot中使用
+
+参考：[spring-boot-http3](https://github.com/silence934/spring-boot-http3)
